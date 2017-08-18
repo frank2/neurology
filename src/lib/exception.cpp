@@ -21,3 +21,16 @@ NeurologyException::what
 {
    return this->explanation;
 }
+
+Win32Exception::Win32Exception
+(const char *message)
+   : NeurologyException(message)
+{
+   this->error = GetLastError();
+}
+
+Win32Exception::Win32Exception
+(Win32Exception &exception)
+{
+   this->error = exception.error;
+}

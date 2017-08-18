@@ -15,4 +15,13 @@ namespace Neurology
       
       virtual const char *what(void) const;
    };
+
+   class Win32Exception : public NeurologyException
+   {
+   public:
+      DWORD error;
+
+      Win32Exception(const char *message);
+      Win32Exception(Win32Exception &exception);
+   };
 }

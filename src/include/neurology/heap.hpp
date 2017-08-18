@@ -3,23 +3,27 @@
 #include <windows.h>
 
 #include <neurology/exception.hpp>
+#include <neurology/memory.hpp>
 
 namespace Neurology
 {
-   class HeapCreateException : public NeurologyException
+   class NullHeapHandleException : public NeurologyException
    {
    public:
-      DWORD error;
-
+      NullHeapHandleException(void);
+      NullHeapHandleException(HeapCreateException &exception);
+   };
+   
+   class HeapCreateException : public Win32Exception
+   {
+   public:
       HeapCreateException(void);
       HeapCreateException(HeapCreateException &exception);
    };
 
-   class HeapAllocException : public NeurologyException
+   class HeapAllocException : public Win32Exception
    {
    public:
-      DWORD error;
-
       HeapAllocException(void);
       HeapAllocException(HeapAllocException &exception);
    };
@@ -33,18 +37,19 @@ namespace Neurology
    
    class HeapAllocation;
    
-   class Heap
+   class HeapAllocator
    {
    public:
-      static Heap ProcessHeap;
+      static HeapAllocator ProcessHeap;
 
    protected:
       HANDLE heapHandle;
 
    public:
-      Heap(HANDLE heapHandle);
-      Heap(DWORD options, SIZE_T initialSize, SIZE_T maximumSize);
-      Heap(Heap &heap);
+      HeapAllocator(void);
+      HeapAllocator(HANDLE heapHandle);
+      HeapAllocator(DWORD options, SIZE_T initialSize, SIZE_T maximumSize);
+      HeapAllocator(HeapAllocator &heap);
 
       static HeapAllocation Allocate(DWORD flags, SIZE_T size);
 
@@ -54,26 +59,18 @@ namespace Neurology
       HeapAllocation allocate(DWORD flags, SIZE_T size);
    };
 
-   class HeapAllocation
+   class HeapAllocation : public Memory
    {
    protected:
-      Heap *heap;
-      DWORD *refCount;
-      LPVOID *buffer;
-      SIZE_T *size;
+      HeapAllocator *heap;
 
    public:
-      HeapAllocation(Heap *heap, DWORD *refCount, LPVOID *buffer, SIZE_T *size);
+      HeapAllocation(void);
+      HeapAllocation(HeapAllocator *heap, LPVOID buffer, SIZE_T size);
       HeapAllocation(HeapAllocation &allocation);
       ~HeapAllocation(void);
 
       Heap *getHeap(void);
-      LPVOID getBuffer(void);
-      LPVOID *getBufferPointer(void);
-      SIZE_T getSize(void);
-      SIZE_T *getSizePointer(void);
-      DWORD getRefCount(void);
-      DWORD *getRefCountPointer(void);
 
       void reallocate(DWORD flags, SIZE_T size);
       void free(void);

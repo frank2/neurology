@@ -2,34 +2,42 @@
 
 using namespace Neurology;
 
-Heap Heap::ProcessHeap(GetProcessHeap());
+Heap Heap::ProcessHeap;
+
+NullHeapHandleException::NullHeapHandleException
+(void)
+   : NeurologyException("the heap handle is null")
+{
+}
+
+NullHeapHandleException::NullHeapHandleException
+(NullHeapHandleException &exception)
+   : NeurologyException(exception)
+{
+}
 
 HeapCreateException::HeapCreateException
 (void)
-   : NeurologyException("HeapCreate() failed")
+   : Win32Exception("HeapCreate() failed")
 {
-   this->error = GetLastError();
 }
 
 HeapCreateException::HeapCreateException
 (HeapCreateException &exception)
-   : NeurologyException(exception)
+   : Win32Exception(exception)
 {
-   this->error = exception.error;
 }
 
 HeapAllocException::HeapAllocException
 (void)
-   : NeurologyException("HeapAlloc()/HeapReAlloc() failed")
+   : Win32Exception("HeapAlloc()/HeapReAlloc() failed")
 {
-   this->error = GetLastError();
 }
 
 HeapAllocException::HeapAllocException
 (HeapAllocException &exception)
-   : NeurologyException(exception)
+   : Win32Exception(exception)
 {
-   this->error = exception.error;
 }
 
 HeapUseAfterFreeException::HeapUseAfterFreeException
@@ -42,6 +50,12 @@ HeapUseAfterFreeException::HeapUseAfterFreeException
 (HeapUseAfterFreeException &exception)
    : NeurologyException(exception)
 {
+}
+
+Heap::Heap
+(void)
+{
+   this->heapHandle = NULL;
 }
 
 Heap::Heap
@@ -90,12 +104,20 @@ HeapAllocation
 Heap::allocate
 (DWORD flags, SIZE_T size)
 {
-   LPVOID allocation = HeapAlloc(this->heapHandle, flags, size);
+   LPVOID allocation;
+   LPDWORD refCount;
+   LPVOID *allocationPointer;
+   SIZE_T *sizePointer;
+
+   if (this->heapHandle == NULL || this->heapHandle == INVALID_HANDLE_VALUE)
+      throw NullHeapHandleException();
+   
+   allocation = HeapAlloc(this->heapHandle, flags, size);
 
    if (allocation == NULL)
       throw HeapAllocException();
 
-   DWORD *refCount = (LPDWORD)HeapAlloc(this->heapHandle, HEAP_ZERO_MEMORY, sizeof(DWORD));
+   refCount = (LPDWORD)HeapAlloc(this->heapHandle, HEAP_ZERO_MEMORY, sizeof(DWORD));
 
    if (refCount == NULL)
    {
@@ -103,7 +125,7 @@ Heap::allocate
       throw HeapAllocException();
    }
 
-   LPVOID *allocationPointer = (LPVOID *)HeapAlloc(this->heapHandle, HEAP_ZERO_MEMORY, sizeof(LPVOID));
+   allocationPointer = (LPVOID *)HeapAlloc(this->heapHandle, HEAP_ZERO_MEMORY, sizeof(LPVOID));
 
    if (allocationPointer == NULL)
    {
@@ -114,7 +136,7 @@ Heap::allocate
 
    *allocationPointer = allocation;
 
-   SIZE_T *sizePointer = (SIZE_T *)HeapAlloc(this->heapHandle, HEAP_ZERO_MEMORY, sizeof(SIZE_T));
+   sizePointer = (SIZE_T *)HeapAlloc(this->heapHandle, HEAP_ZERO_MEMORY, sizeof(SIZE_T));
 
    if (sizePointer == NULL)
    {
@@ -130,14 +152,24 @@ Heap::allocate
 }
 
 HeapAllocation::HeapAllocation
-(Heap *heap, DWORD *refCount, LPVOID *buffer, SIZE_T *size)
+(void)
+{
+   this->heap = NULL;
+   this->refCount = NULL;
+   this->buffer = NULL;
+   this->size = NULL;
+}
+
+HeapAllocation::HeapAllocation
+(Heap *heap, LPVOID buffer, SIZE_T size)
 {
    this->heap = heap;
    this->refCount = refCount;
    this->buffer = buffer;
    this->size = size;
 
-   ++*this->refCount;
+   if (*this->refCount == 0)
+      ++*this->refCount;
 }
 
 HeapAllocation::HeapAllocation
