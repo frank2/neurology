@@ -16,10 +16,16 @@
     <Filter Include="Header Files\neurology">
       <UniqueIdentifier>{7f8c9819-6bd0-437e-a651-5daa4fec60eb}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Header Files\neurology\directories">
+    <Filter Include="Header Files\neurology\pe">
+      <UniqueIdentifier>{b9112d9e-3470-49e8-b14a-1e1845adc978}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\neurology\pe\directories">
       <UniqueIdentifier>{85cd9b21-ec4c-433b-8be2-607404caeb44}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source Files\directories">
+    <Filter Include="Source Files\pe">
+      <UniqueIdentifier>{40bdc4f7-678d-4942-89db-4ade56e056a1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\pe\directories">
       <UniqueIdentifier>{93044a30-80cf-44c2-8c71-92ce41bf92b3}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
@@ -30,25 +36,10 @@
     <ClInclude Include="..\..\src\include\neurology.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\src\include\neurology\dos.hpp">
-      <Filter>Header Files\neurology</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\src\include\neurology\exception.hpp">
       <Filter>Header Files\neurology</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\src\include\neurology\file.hpp">
-      <Filter>Header Files\neurology</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\src\include\neurology\nt.hpp">
-      <Filter>Header Files\neurology</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\src\include\neurology\optional.hpp">
-      <Filter>Header Files\neurology</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\src\include\neurology\pe.hpp">
-      <Filter>Header Files\neurology</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\src\include\neurology\section.hpp">
       <Filter>Header Files\neurology</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\include\neurology\process.hpp">
@@ -60,27 +51,33 @@
     <ClInclude Include="..\..\src\include\neurology\heap.hpp">
       <Filter>Header Files\neurology</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\src\include\neurology\pe\dos.hpp">
+      <Filter>Header Files\neurology\pe</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\include\neurology\pe\file.hpp">
+      <Filter>Header Files\neurology\pe</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\include\neurology\pe\nt.hpp">
+      <Filter>Header Files\neurology\pe</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\include\neurology\pe\optional.hpp">
+      <Filter>Header Files\neurology\pe</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\include\neurology\pe\section.hpp">
+      <Filter>Header Files\neurology\pe</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\include\neurology\pe\image.hpp">
+      <Filter>Header Files\neurology\pe</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\include\neurology\configuration.hpp">
+      <Filter>Header Files\neurology</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\include\neurology\security.hpp">
+      <Filter>Header Files\neurology</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\src\lib\dos.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\src\lib\exception.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\lib\file.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\lib\nt.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\lib\optional.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\lib\pe.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\lib\section.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\lib\process.cpp">
@@ -90,6 +87,30 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\lib\heap.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\lib\pe\dos.cpp">
+      <Filter>Source Files\pe</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\lib\pe\file.cpp">
+      <Filter>Source Files\pe</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\lib\pe\nt.cpp">
+      <Filter>Source Files\pe</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\lib\pe\optional.cpp">
+      <Filter>Source Files\pe</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\lib\pe\section.cpp">
+      <Filter>Source Files\pe</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\lib\pe\image.cpp">
+      <Filter>Source Files\pe</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\lib\configuration.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\lib\security.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

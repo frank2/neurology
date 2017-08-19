@@ -3,25 +3,33 @@
 #include <windows.h>
 
 #include <neurology/exception.hpp>
-#include <neurology/heap.hpp>
+#include <neurology/memory.hpp>
 
 namespace Neurology
 {
+   class NullProcessException : public NeurologyException
+   {
+   public:
+      NullProcessException(void);
+      NullProcessException(NullProcessException &exception);
+   };
+   
    class OpenProcessException : public Win32Exception
    {
    public:
       OpenProcessException(void);
       OpenProcessException(OpenProcessException &exception);
-   }
+   };
+
+   class ProcessMemory;
    
    class Process
    {
    public:
       static Process CurrentProcess;
-      const static DWORD INVALID_PID = 0xFFFFFFFF;
-      
+      const static DWORD CURRENT_PROCESS_HANDLE = 0xFFFFFFFF;
+
    protected:
-      DWORD pid;
       HANDLE handle;
 
    public:
@@ -30,7 +38,19 @@ namespace Neurology
       Process(DWORD desiredAccess, BOOL inheritHandle, DWORD processID);
       Process(Process &process);
 
+      DWORD pid(void);
+      void openProcess(DWORD desiredAccess, BOOL inheritHandle, DWORD processID);
       HANDLE getHandle(void);
-      HeapAllocation read(LPVOID address, SIZE_T size, SIZE_T *bytesRead);
+      Data read(LPVOID address, SIZE_T size);
    };
+
+   class ProcessMemory : public Memory
+   {
+   protected:
+      Process *process;
+
+   public:
+      ProcessMemory(void);
+      ProcessMemory(Process *process, LPVOID address, SIZE_T size);
+      ProcessMemory(ProcessMemory &memory);
 }
