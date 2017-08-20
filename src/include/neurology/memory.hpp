@@ -54,28 +54,44 @@ namespace Neurology
    class Memory
    {
    protected:
-      LPVOID *buffer;
-      SIZE_T *size;
+      Memory *parent;
+      
+      union
+      {
+         LPVOID *pointerRef;
+         SIZE_T *offsetRef;
+      };
+      
+      SIZE_T *sizeRef;
       LPDWORD refCount;
 
    public:
       Memory(void);
-      Memory(LPVOID buffer, SIZE_T size);
+      Memory(LPVOID pointer, SIZE_T size);
+      Memory(Memory *parent, SIZE_T offset, SIZE_T size);
       Memory(Memory &memory);
       ~Memory(void);
+
+      void ref(void);
+      void deref(void);
+      DWORD refs(void);
+      bool isNull(void);
+      bool isValid(void);
+      void invalidate(void);
 
       SIZE_T size(void);
       Address address(void);
       Address address(SIZE_T offset);
-      LPVOID bufferAddress(SIZE_T offset);
-      SIZE_T bufferOffset(LPVOID address);
+      LPVOID pointer(void);
+      LPVOID pointer(SIZE_T offset);
+      SIZE_T offset(LPVOID address);
       LPVOID start(void);
       LPVOID end(void);
       bool inRange(LPVOID address);
       bool inRange(LPVOID address, SIZE_T size);
-      void setBuffer(LPVOID base);
-      void setSize(SIZE_T size);
-      virtual void free(void);
+      virtual void setPointer(LPVOID base);
+      virtual void setOffset(SIZE_T offset);
+      virtual void setSize(SIZE_T size);
       Data read(void);
       Data read(SIZE_T size);
       Data read(SIZE_T offset, SIZE_T size);
@@ -86,9 +102,6 @@ namespace Neurology
       void write(SIZE_T offset, Data data);
       void write(LPVOID address, Memory *region);
       virtual void write(LPVOID address, Data data);
-
-   protected:
-      virtual void kill(void);
    };
 
    class Address
@@ -102,9 +115,10 @@ namespace Neurology
       Address(Memory *memory);
       Address(Memory *memory, SIZE_T offset);
       Address(Address &address);
+      ~Address(void);
 
-      LPVOID address(void);
-      LPVOID address(SIZE_T offset);
+      LPVOID pointer(void);
+      LPVOID pointer(SIZE_T offset);
       Data read(SIZE_T size);
       Data read(SIZE_T offset, SIZE_T size);
       void write(Data data);
@@ -172,12 +186,16 @@ namespace Neurology
          this->address->write(this->cache);
       }
 
-      virtual Type *deref(void) const
+      virtual Type *resolve(void) const
       {
          if (this->address == NULL)
             throw NullPointerException();
          
          this->cache = this->address->read(this->size);
+
+         if (this->cache.size() != this->size)
+            this->cache.resize(this->size);
+         
          return (Type *)this->cache.data();
       }
 
@@ -199,7 +217,7 @@ namespace Neurology
 
       Type *operator*(void) const
       {
-         return this->deref();
+         return this->resolve();
       }
       
       virtual void operator=(Type object)

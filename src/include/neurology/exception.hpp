@@ -22,6 +22,7 @@ namespace Neurology
       DWORD error;
 
       Win32Exception(const char *message);
+      Win32Exception(DWORD error, const char *message);
       Win32Exception(Win32Exception &exception);
    };
 }

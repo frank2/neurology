@@ -4,7 +4,7 @@ using namespace Neurology;
 
 NullPointerException::NullPointerException
 (void)
-   : NeurologyException("buffer pointer is null")
+   : NeurologyException("pointer pointer is null")
 {
 }
 
@@ -69,32 +69,133 @@ OffsetOutOfBoundsException::OffsetOutOfBoundsException
 Memory::Memory
 (void)
 {
-   this->buffer = NULL;
-   this->size = NULL;
+   this->parent = NULL;
+   this->pointerRef = NULL;
+   this->sizeRef = NULL;
    this->refCount = NULL;
 }
 
 Memory::Memory
-(LPVOID buffer, SIZE_T size)
+(LPVOID pointer, SIZE_T size)
 {
-   this->setBuffer(buffer);
+   this->parent = NULL;
+   this->setPointer(pointer);
    this->setSize(size);
+   this->ref();
+}
+
+Memory::Memory
+(Memory *parent, SIZE_T offset, SIZE_T size)
+{
+   this->parent = parent;
+
+   if (parent == NULL)
+      throw NullPointerException();
+   
+   this->setOffset(offset);
+   this->setSize(size);
+   this->ref();
 }
 
 Memory::Memory
 (Memory &memory)
 {
-   this->buffer = memory.buffer;
-   this->size = memory.size;
+   this->deref();
+
+   this->parent = memory.parent;
+   this->pointerRef = memory.pointerRef;
+   this->sizeRef = memory.sizeRef;
    this->refCount = memory.refCount;
 
-   ++*this->refCount;
+   this->ref();
 }
 
 Memory::~Memory
 (void)
 {
-   this->free();
+   this->deref();
+}
+
+void
+Memory::ref
+(void)
+{
+   if (this->refCount == NULL)
+   {
+      this->refCount = new DWORD;
+      *this->refCount = 1;
+   }
+   else
+      ++*this->refCount;
+
+   if (this->parent != NULL)
+      this->parent->ref();
+}
+
+void
+Memory::deref
+(void)
+{
+   if (this->refCount == NULL)
+      return;
+
+   --*this->refCount;
+
+   if (*this->refCount <= 0)
+   {
+      if (this->pointerRef != NULL)
+      {
+         delete this->pointerRef;
+         this->pointerRef = NULL;
+      }
+
+      if (this->sizeRef != NULL)
+      {
+         delete this->sizeRef;
+         this->sizeRef = NULL;
+      }
+
+      delete this->refCount;
+      this->refCount = NULL;
+   }
+}
+
+DWORD
+Memory::refs
+(void)
+{
+   if (this->refCount == NULL)
+      return 0;
+
+   return *this->refCount;
+}
+
+bool
+Memory::isValid
+(void)
+{
+   bool result = this->pointerRef != NULL;
+
+   if (this->parent.refs() > 0)
+      result &= this->parent.isValid();
+   else if (result)
+      result &= *this->pointerRef != NULL;
+
+   return result && this->size() != 0;
+}
+
+void
+Memory::invalidate
+(void)
+{
+   if (this->pointerRef == NULL)
+      throw NullPointerException();
+
+   if (this->sizeRef == NULL)
+      throw NullPointerException();
+
+   *this->pointerRef = NULL;
+   *this->sizeRef = 0;
 }
 
 SIZE_T
@@ -111,6 +212,14 @@ Address
 Memory::address
 (void)
 {
+   if (this->parent != NULL)
+   {
+      if (this->offsetRef == NULL)
+         throw NullPointerException();
+      
+      return this->parent->address(*this->offsetRef);
+   }
+   
    return this->address(0);
 }
 
@@ -122,47 +231,71 @@ Memory::address
 }
 
 LPVOID
-Memory::bufferAddress
+Memory::pointer
+(void)
+{
+   if (this->parent != NULL)
+   {
+      if (this->offsetRef == NULL)
+         throw NullPointerException();
+      
+      return this->parent->pointer(*this->offsetRef);
+   }
+
+   return this->pointer(0);
+}
+
+LPVOID
+Memory::pointer
 (SIZE_T offset)
 {
-   if (this->buffer == NULL || *this->buffer == NULL)
-      return NULL;
+   if (this->pointerRef == NULL || this->sizeRef == NULL)
+      throw NullPointerException();
 
-   return (LPVOID)(((LPBYTE)*this->buffer)+offset);
+   if (this->parent != NULL)
+      return this->parent->pointer(offset + *this->offsetRef);
+
+   if (offset > *this->sizeRef)
+      throw OffsetOutOfBoundsException(this, offset, 0);
+
+   return (LPVOID)((LPBYTE)*this->pointerRef + offset);
 }
 
 SIZE_T
-Memory::bufferOffset
+Memory::offset
 (LPVOID address)
 {
    if (!this->inRange(address))
       throw AddressOutOfBoundsException(this, address, 0);
 
-   return (SIZE_T)address - (SIZE_T)*this->buffer;
+   return (SIZE_T)address - (SIZE_T)this->pointer();
 }
    
 LPVOID
 Memory::start
 (void)
 {
-   return this->bufferAddress(0);
+   return this->pointer();
 }
 
 LPVOID
 Memory::end
 (void)
 {
-   if (this->size == NULL || *this->size == 0)
+   if (this->sizeRef == NULL)
+      throw NullPointerException();
+   
+   if (*this->sizeRef == 0)
       return this->start();
 
-   return this->bufferAddress(*this->size);
+   return this->pointer(*this->sizeRef);
 }
 
 bool
 Memory::inRange
 (LPVOID address)
 {
-   return this->buffer != NULL && *this->buffer != NULL && address >= this->start() && address < this->end();
+   return this->pointerRef != NULL && address >= this->start() && address <= this->end();
 }
 
 bool
@@ -175,61 +308,33 @@ Memory::inRange
 }
 
 void
-Memory::setBuffer
+Memory::setPointer
 (LPVOID base)
 {
-   if (this->buffer == NULL)
-      this->buffer = new LPVOID;
+   if (this->pointerRef == NULL)
+      this->pointerRef = new LPVOID;
 
-   if (this->refCount == NULL)
-   {
-      this->refCount = new DWORD;
-      *this->refCount = 1;
-   }
-
-   if (this->size == NULL)
-   {
-      this->size = new SIZE_T;
-      *this->size = 0;
-   }
-
-   *this->buffer = base;
+   *this->pointer = base;
 }
 
 void
 Memory::setSize
 (SIZE_T size)
 {
-   if (this->buffer == NULL || *this->buffer == NULL)
-      throw NullPointerException();
+   if (this->sizeRef == NULL)
+      this->sizeRef = new SIZE_T;
 
-   if (this->size == NULL)
-      this->size = new SIZE_T;
-
-   *this->size = size;
-}
-
-void
-Memory::free
-(void)
-{
-   if (this->buffer == NULL || *this->buffer == NULL)
-      throw NullPointerException();
-
-   --*this->refCount;
-
-   if (*this->refCount <= 0)
-      this->kill();
+   *this->sizeRef = size;
 }
 
 Data
 Memory::read
 (void)
 {
-   if (this->size == NULL)
+   if (this->sizeRef == NULL)
       throw NullPointerException();
    
-   return this->read(*this->size);
+   return this->read(*this->sizeRef);
 }
 
 Data
@@ -245,7 +350,7 @@ Memory::read
 {
    try
    {
-      return this->read(this->bufferAddress(offset), size);
+      return this->read(this->pointer(offset), size);
    }
    catch (AddressOutOfBoundsException &exception)
    {
@@ -259,7 +364,7 @@ Memory::read
 {
    Data result;
    
-   if (this->buffer == NULL || *this->buffer == NULL)
+   if (this->pointerRef == NULL || *this->pointerRef == NULL)
       throw NullPointerException();
 
    if (!this->inRange(address, size))
@@ -267,6 +372,9 @@ Memory::read
 
    if (size == 0)
       return result;
+
+   if (this->parent != NULL)
+      return this->parent->read(address, size);
 
    __try
    {
@@ -307,7 +415,7 @@ Memory::write
 {
    try
    {
-      this->write(this->bufferAddress(offset), data);
+      this->write(this->pointerAddress(offset), data);
    }
    catch (AddressOutOfBoundsException &exception)
    {
@@ -326,7 +434,7 @@ void
 Memory::write
 (LPVOID address, Data data)
 {
-   if (this->buffer == NULL || *this->buffer == NULL)
+   if (this->pointerRef == NULL || *this->pointerRef == NULL)
       throw NullPointerException();
 
    if (!this->inRange(address, data.size()))
@@ -335,6 +443,9 @@ Memory::write
    if (data.size() == 0)
       return;
 
+   if (this->parent != NULL)
+      return this->parent->write(address, data);
+   
    __try
    {
       CopyMemory(address, data.data(), data.size());
@@ -343,33 +454,6 @@ Memory::write
    {
       throw BadPointerException(address, data.size());
    }
-}
-
-void
-Memory::kill
-(void)
-{
-   if (this->buffer != NULL)
-   {
-      *this->buffer = NULL;
-      delete this->buffer;
-   }
-
-   if (this->size != NULL)
-   {
-      *this->size = 0;
-      delete this->size;
-   }
-
-   if (this->refCount != NULL)
-   {
-      *this->refCount = 0;
-      delete this->refCount;
-   }
-
-   this->buffer = NULL;
-   this->size = NULL;
-   this->refCount = NULL;
 }
 
 Address::Address
@@ -387,6 +471,8 @@ Address::Address
 
    this->memory = memory;
    this->offset = 0;
+
+   this->memory->ref();
 }
 
 Address::Address
@@ -395,29 +481,47 @@ Address::Address
    if (memory == NULL)
       throw NullPointerException();
 
-   if (!memory->inRange(memory->bufferAddress(offset)))
+   if (!memory->inRange(memory->pointerAddress(offset)))
       throw OffsetOutOfBoundsException(memory, offset, 0);
 
    this->memory = memory;
    this->offset = offset;
+
+   this->memory->ref();
 }
 
 Address::Address
 (Address &address)
 {
+   if (this->memory != NULL)
+      this->memory->deref();
+   
    this->memory = address.memory;
    this->offset = address.offset;
+
+   if (this->memory != NULL)
+      this->memory->ref();
 }
 
-LPVOID
-Address::address
+Address::~Address
 (void)
 {
-   return this->address(0);
+   if (this->memory != NULL)
+      this->memory->deref();
+
+   this->memory = NULL;
+   this->offset = 0;
 }
 
 LPVOID
-Address::address
+Address::pointer
+(void)
+{
+   return this->pointer(0);
+}
+
+LPVOID
+Address::pointer
 (SIZE_T offset)
 {
    LPVOID addr;
@@ -425,12 +529,7 @@ Address::address
    if (this->memory == NULL)
       throw NullPointerException();
 
-   addr = this->memory->bufferAddress(this->offset+offset);
-   
-   if (!this->memory->inRange(addr))
-      throw OffsetOutOfBoundsException(this->memory, this->offset+offset, 0);
-   
-   return addr;
+   return this->memory->pointer(this->offset + offset);
 }
    
 Data
@@ -449,7 +548,7 @@ Address::read
 
    try
    {
-      return this->memory->read(this->address(offset), size);
+      return this->memory->read(this->pointer(this->offset+offset), size);
    }
    catch (AddressOutOfBoundsException &exception)
    {
@@ -473,7 +572,7 @@ Address::write
 
    try
    {
-      this->memory->write(this->address(offset), data);
+      this->memory->write(this->pointer(this->offset+offset), data);
    }
    catch (AddressOutOfBoundsException &exception)
    {

@@ -30,6 +30,13 @@ Win32Exception::Win32Exception
 }
 
 Win32Exception::Win32Exception
+(DWORD error, const char *message)
+   : NeurologyException(message)
+{
+   this->error = error;
+}
+
+Win32Exception::Win32Exception
 (Win32Exception &exception)
 {
    this->error = exception.error;
