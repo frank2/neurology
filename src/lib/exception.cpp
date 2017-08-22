@@ -3,8 +3,7 @@
 using namespace Neurology;
 
 NeurologyException::NeurologyException
-(char *message)
-   : std::exception()
+(const LPWSTR message)
 {
    this->explanation = message;
 }
@@ -12,25 +11,18 @@ NeurologyException::NeurologyException
 NeurologyException::NeurologyException
 (NeurologyException &exception)
 {
-   this->explanation = exception.what();
-}
-
-const char *
-NeurologyException::what
-(void) const
-{
-   return this->explanation;
+   this->explanation = exception.explanation;
 }
 
 Win32Exception::Win32Exception
-(const char *message)
+(const LPWSTR message)
    : NeurologyException(message)
 {
    this->error = GetLastError();
 }
 
 Win32Exception::Win32Exception
-(DWORD error, const char *message)
+(DWORD error, const LPWSTR message)
    : NeurologyException(message)
 {
    this->error = error;
@@ -38,6 +30,25 @@ Win32Exception::Win32Exception
 
 Win32Exception::Win32Exception
 (Win32Exception &exception)
+   : NeurologyException(exception)
 {
    this->error = exception.error;
+}
+
+NullPointerException::NullPointerException
+(void)
+   : NeurologyException(EXCSTR(L"A pointer was null when it shouldn't have been."))
+{
+}
+
+NullPointerException::NullPointerException
+(const LPWSTR message)
+   : NeurologyException(message)
+{
+}
+
+NullPointerException::NullPointerException
+(NullPointerException &exception)
+   : NeurologyException(exception)
+{
 }

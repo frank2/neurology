@@ -1,19 +1,24 @@
 #pragma once
 
-#include <exception>
+#include <windows.h>
 
 namespace Neurology
 {
-   class NeurologyException : public std::exception
+
+#ifdef _DEBUG
+#define EXCSTR(str) (str)
+#else
+#define EXCSTR(str) (NULL)
+#endif
+   
+   class NeurologyException
    {
-   protected:
-      const char *explanation;
+   public:
+      LPWSTR explanation;
       
    public:
-      NeurologyException(const char *message);
+      NeurologyException(const LPWSTR message);
       NeurologyException(NeurologyException &exception);
-      
-      virtual const char *what(void) const;
    };
 
    class Win32Exception : public NeurologyException
@@ -21,8 +26,16 @@ namespace Neurology
    public:
       DWORD error;
 
-      Win32Exception(const char *message);
-      Win32Exception(DWORD error, const char *message);
+      Win32Exception(const LPWSTR message);
+      Win32Exception(DWORD error, const LPWSTR message);
       Win32Exception(Win32Exception &exception);
+   };
+
+   class NullPointerException : public NeurologyException
+   {
+   public:
+      NullPointerException(void);
+      NullPointerException(const LPWSTR message);
+      NullPointerException(NullPointerException &exception);
    };
 }

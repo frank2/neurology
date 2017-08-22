@@ -2,6 +2,8 @@
 
 #include <windows.h>
 
+#include <map>
+
 #include <neurology/exception.hpp>
 #include <neurology/memory.hpp>
 
@@ -12,13 +14,6 @@ namespace Neurology
    public:
       NullProcessException(void);
       NullProcessException(NullProcessException &exception);
-   };
-   
-   class OpenProcessException : public Win32Exception
-   {
-   public:
-      OpenProcessException(void);
-      OpenProcessException(OpenProcessException &exception);
    };
 
    class ProcessMemory;
@@ -44,13 +39,23 @@ namespace Neurology
       Data read(LPVOID address, SIZE_T size);
    };
 
-   class ProcessMemory : public Memory
+   class ProcessMemory;
+   
+   class ProcessMemoryManager : public Memory
    {
    protected:
       Process *process;
+      std::map<Address, ProcessMemory> memory;
+   };
+
+   class ProcessMemory : public Memory
+   {
+   protected:
+      ProcessMemoryManager *manager;
 
    public:
       ProcessMemory(void);
       ProcessMemory(Process *process, LPVOID address, SIZE_T size);
       ProcessMemory(ProcessMemory &memory);
+   };
 }

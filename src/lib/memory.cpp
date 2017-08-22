@@ -2,68 +2,300 @@
 
 using namespace Neurology;
 
-NullPointerException::NullPointerException
-(void)
-   : NeurologyException("pointer pointer is null")
+MemoryException::MemoryException
+(Memory *memory, const LPWSTR message)
+   : NeurologyException(message)
 {
+   this->memory = memory;
+
+   if (memory != NULL)
+      memory->ref();
 }
 
-NullPointerException::NullPointerException
-(NullPointerException &exception)
+MemoryException::MemoryException
+(MemoryException &exception)
    : NeurologyException(exception)
 {
+   if (this->memory != NULL)
+      this->memory->deref();
+
+   this->memory = exception.memory;
+
+   if (this->memory != NULL)
+      this->memory->ref();
+}
+
+MemoryException::~MemoryException
+(void)
+{
+   if (this->memory != NULL)
+      this->memory->deref();
+}
+
+BadModeException::BadModeException
+(Memory *memory, Memory::Mode mode)
+   : MemoryException(memory, EXCSTR(L"Invalid mode operation on memory."))
+{
+   this->mode = mode;
+}
+
+BadModeException::BadModeException
+(BadModeException &exception)
+   : MemoryException(exception)
+{
+   this->mode = exception.mode;
 }
 
 BadPointerException::BadPointerException
-(LPVOID address, SIZE_T size)
-   : NeurologyException("provided pointer is bad")
+(Memory *memory, LPVOID pointer, SIZE_T size, Memory::Mode op)
+   : MemoryException(memory, EXCSTR(L"Pointer is bad."))
 {
-   this->address = address;
+   this->pointer = pointer;
    this->size = size;
+   this->op = op;
 }
 
 BadPointerException::BadPointerException
 (BadPointerException &exception)
-   : NeurologyException(exception)
+   : MemoryException(exception)
 {
-   this->address = exception.address;
+   this->pointer = exception.pointer;
    this->size = exception.size;
+   this->op = exception.op;
 }
 
-AddressOutOfBoundsException::AddressOutOfBoundsException
-(Memory *memory, LPVOID address, SIZE_T size)
-   : NeurologyException("offset and size are out of bounds in region")
+PointerOutOfBoundsException::PointerOutOfBoundsException
+(Memory *memory, LPVOID pointer, SIZE_T size)
+   : MemoryException(memory, EXCSTR(L"Pointer and size are out of bounds in region."))
 {
-   this->memory = memory;
-   this->address = address;
+   this->pointer = pointer;
    this->size = size;
 }
 
-AddressOutOfBoundsException::AddressOutOfBoundsException
-(AddressOutOfBoundsException &exception)
-   : NeurologyException(exception)
+PointerOutOfBoundsException::PointerOutOfBoundsException
+(PointerOutOfBoundsException &exception)
+   : MemoryException(exception)
 {
-   this->memory = exception.memory;
-   this->address = exception.address;
+   this->pointer = exception.pointer;
    this->size = exception.size;
 }
 
 OffsetOutOfBoundsException::OffsetOutOfBoundsException
 (Memory *memory, SIZE_T offset, SIZE_T size)
-   : NeurologyException("offset and size are out of bounds in region")
+   : MemoryException(memory, EXCSTR(L"Offset and size are out of bounds in region"))
 {
-   this->memory = memory;
    this->offset = offset;
    this->size = size;
 }
 
 OffsetOutOfBoundsException::OffsetOutOfBoundsException
 (OffsetOutOfBoundsException &exception)
-   : NeurologyException(exception)
+   : MemoryException(exception)
 {
-   this->memory = exception.memory;
    this->offset = exception.offset;
    this->size = exception.size;
+}
+
+PointerWithParentException::PointerWithParentException
+(Memory *memory)
+   : MemoryException(memory, EXCSTR(L"Pointer created with parent present. Use Memory::setOffset instead."))
+{
+}
+
+PointerWithParentException::PointerWithParentException
+(PointerWithParentException &exception)
+   : MemoryException(exception)
+{
+}
+
+OffsetWithoutParentException::OffsetWithoutParentException
+(Memory *memory)
+   : MemoryException(memory, EXCSTR(L"Offset created without parent present. Use Memory::setPointer instead."))
+{
+}
+
+OffsetWithoutParentException::OffsetWithoutParentException
+(OffsetWithoutParentException &exception)
+   : MemoryException(exception)
+{
+}
+
+NegativeOffsetException::NegativeOffsetException
+(Memory *memory, __int64 offset)
+   : MemoryException(memory, EXCSTR(L"Negative offset exceeds all parent region boundaries."))
+{
+   this->offset = offset;
+}
+
+NegativeOffsetException::NegativeOffsetException
+(NegativeOffsetException &exception)
+   : MemoryException(exception)
+{
+   this->offset = exception.offset;
+}
+
+Memory::Mode::Mode
+(void)
+{
+   this->flags = 0;
+}
+
+Memory::Mode::Mode
+(bool read, bool write, bool execute)
+{
+   this->flags = Memory::Mode::Flags(read, write, execute);
+}
+
+Memory::Mode::Mode
+(BYTE flags)
+{
+   this->flags = flags;
+}
+
+Memory::Mode::Mode
+(Memory::Mode &mode)
+{
+   this->flags = mode.flags;
+}
+
+void
+Memory::Mode::operator=
+(BYTE flags)
+{
+   this->flags = flags;
+}
+
+Memory::Mode
+Memory::Mode::operator&
+(BYTE mask)
+{
+   return Memory::Mode(this->flags & mask);
+}
+
+Memory::Mode
+Memory::Mode::operator&
+(Mode mask)
+{
+   return Memory::Mode(this->flags & mask.flags);
+}
+
+Memory::Mode
+Memory::Mode::operator|
+(BYTE mask)
+{
+   return Memory::Mode(mask | this->flags);
+}
+
+Memory::Mode
+Memory::Mode::operator|
+(Mode mask)
+{
+   return Memory::Mode(mask.flags | this->flags);
+}
+
+Memory::Mode
+Memory::Mode::operator^
+(BYTE mask)
+{
+   return Memory::Mode(mask ^ this->flags);
+}
+
+Memory::Mode
+Memory::Mode::operator^
+(Mode mask)
+{
+   return Memory::Mode(mask.flags ^ this->flags);
+}
+
+void
+Memory::Mode::operator&=
+(BYTE mask)
+{
+   this->flags &= mask;
+}
+
+void
+Memory::Mode::operator&=
+(Mode mask)
+{
+   this->flags &= mask.flags;
+}
+
+void
+Memory::Mode::operator|=
+(BYTE mask)
+{
+   this->flags |= mask;
+}
+
+void
+Memory::Mode::operator|=
+(Mode mask)
+{
+   this->flags |= mask.flags;
+}
+
+void
+Memory::Mode::operator^=
+(BYTE mask)
+{
+   this->flags ^= mask;
+}
+
+void
+Memory::Mode::operator^=
+(Mode mask)
+{
+   this->flags ^= mask.flags;
+}
+
+BYTE
+Memory::Mode::Flags
+(bool read, bool write, bool execute)
+{
+   return (BYTE)(((BYTE)read << 2) | ((BYTE)write << 1) | ((BYTE)execute));
+}
+
+void
+Memory::Mode::markReadable
+(void)
+{
+   this->read = 1;
+}
+
+void
+Memory::Mode::markWritable
+(void)
+{
+   this->write = 1;
+}
+
+void
+Memory::Mode::markExecutable
+(void)
+{
+   this->execute = 1;
+}
+
+void
+Memory::Mode::unmarkReadable
+(void)
+{
+   this->read = 0;
+}
+
+void
+Memory::Mode::unmarkWritable
+(void)
+{
+   this->write = 0;
+}
+
+void
+Memory::Mode::unmarkExecutable
+(void)
+{
+   this->execute = 0;
 }
    
 Memory::Memory
@@ -76,24 +308,27 @@ Memory::Memory
 }
 
 Memory::Memory
-(LPVOID pointer, SIZE_T size)
+(LPVOID pointer, SIZE_T size, Mode mode)
 {
    this->parent = NULL;
    this->setPointer(pointer);
    this->setSize(size);
+   this->setMode(mode);
    this->ref();
 }
 
 Memory::Memory
-(Memory *parent, SIZE_T offset, SIZE_T size)
+(Memory *parent, SIZE_T offset, SIZE_T size, Mode mode)
 {
    this->parent = parent;
 
    if (parent == NULL)
       throw NullPointerException();
-   
+
+   this->parent->ref();
    this->setOffset(offset);
    this->setSize(size);
+   this->setMode(mode);
    this->ref();
 }
 
@@ -105,6 +340,7 @@ Memory::Memory
    this->parent = memory.parent;
    this->pointerRef = memory.pointerRef;
    this->sizeRef = memory.sizeRef;
+   this->modeRef = memory.modeRef;
    this->refCount = memory.refCount;
 
    this->ref();
@@ -114,6 +350,13 @@ Memory::~Memory
 (void)
 {
    this->deref();
+}
+
+Memory *
+Memory::getParent
+(void)
+{
+   return this->parent;
 }
 
 void
@@ -155,6 +398,12 @@ Memory::deref
          this->sizeRef = NULL;
       }
 
+      if (this->modeRef != NULL)
+      {
+         delete this->modeRef;
+         this->modeRef = NULL;
+      }
+
       delete this->refCount;
       this->refCount = NULL;
    }
@@ -171,13 +420,20 @@ Memory::refs
 }
 
 bool
+Memory::isNull
+(void)
+{
+   return (this->parent != NULL && (this->offsetRef == NULL || this->parent->isNull()) || (this->pointerRef == NULL || *this->pointerRef == NULL);
+}
+
+bool
 Memory::isValid
 (void)
 {
    bool result = this->pointerRef != NULL;
 
-   if (this->parent.refs() > 0)
-      result &= this->parent.isValid();
+   if (this->parent != NULL)
+      result &= this->parent->isValid() && this->parent->inRange(*this->offsetRef);
    else if (result)
       result &= *this->pointerRef != NULL;
 
@@ -198,6 +454,116 @@ Memory::invalidate
    *this->sizeRef = 0;
 }
 
+Memory::Mode
+Memory::mode
+(void)
+{
+   if (this->modeRef == NULL)
+      throw NullPointerException();
+   
+   return *this->modeRef;
+}
+
+bool
+Memory::readable
+(void)
+{
+   if (this->modeRef == NULL)
+      throw NullPointerException();
+
+   return (bool)this->modeRef->read;
+}
+
+bool
+Memory::writable
+(void)
+{
+   if (this->modeRef == NULL)
+      throw NullPointerException();
+
+   return (bool)this->modeRef->write;
+}
+
+bool
+Memory::executable
+(void)
+{
+   if (this->modeRef == NULL)
+      throw NullPointerException();
+
+   return (bool)this->modeRef->execute;
+}
+
+void
+Memory::markReadable
+(void)
+{
+   if (this->modeRef == NULL)
+      throw NullPointerException();
+
+   this->modeRef->markReadable();
+}
+
+void
+Memory::markWritable
+(void)
+{
+   if (this->modeRef == NULL)
+      throw NullPointerException();
+
+   this->modeRef->markWritable();
+}
+
+void
+Memory::markExecutable
+(void)
+{
+   if (this->modeRef == NULL)
+      throw NullPointerException();
+
+   this->modeRef->markExecutable();
+}
+
+void
+Memory::unmarkReadable
+(void)
+{
+   if (this->modeRef == NULL)
+      throw NullPointerException();
+
+   this->modeRef->unmarkReadable();
+}
+
+void
+Memory::unmarkWritable
+(void)
+{
+   if (this->modeRef == NULL)
+      throw NullPointerException();
+
+   this->modeRef->unmarkWritable();
+}
+
+void
+Memory::unmarkExecutable
+(void)
+{
+   if (this->modeRef == NULL)
+      throw NullPointerException();
+
+   this->modeRef->unmarkExecutable();
+}
+
+void
+Memory::setModeFlags
+(BYTE flags)
+{
+   if (this->modeRef == NULL)
+      throw NullPointerException();
+
+   *this->modeRef = flags;
+}
+
 SIZE_T
 Memory::size
 (void)
@@ -208,18 +574,20 @@ Memory::size
    return *this->size;
 }
 
+Memory::Mode
+Memory::mode
+(void)
+{
+   if (this->modeRef == NULL)
+      throw NullPointerException();
+
+   return *this->modeRef;
+}
+
 Address
 Memory::address
 (void)
 {
-   if (this->parent != NULL)
-   {
-      if (this->offsetRef == NULL)
-         throw NullPointerException();
-      
-      return this->parent->address(*this->offsetRef);
-   }
-   
    return this->address(0);
 }
 
@@ -227,7 +595,18 @@ Address
 Memory::address
 (SIZE_T offset)
 {
-   return Address(this, offset);
+   Memory *addressParent = this;
+
+   while (addressParent != NULL && !addressParent->inRange(addressParent->pointer(offset)))
+   {
+      offset += addressParent->offset();
+      addressParent = addressParent->getParent();
+   }
+
+   if (addressParent == NULL)
+      throw OffsetOutOfBoundsException(this, offset, 0);
+   
+   return Address(addressParent, offset);
 }
 
 LPVOID
@@ -263,10 +642,22 @@ Memory::pointer
 
 SIZE_T
 Memory::offset
+(void)
+{
+   if (this->parent == NULL)
+      return 0;
+   else if (this->offsetRef == NULL)
+      throw NullPointerException();
+   else
+      return *this->offsetRef;
+}
+   
+SIZE_T
+Memory::offset
 (LPVOID address)
 {
    if (!this->inRange(address))
-      throw AddressOutOfBoundsException(this, address, 0);
+      throw PointerOutOfBoundsException(this, address, 0);
 
    return (SIZE_T)address - (SIZE_T)this->pointer();
 }
@@ -293,28 +684,74 @@ Memory::end
 
 bool
 Memory::inRange
-(LPVOID address)
+(SIZE_T offset, SIZE_T size)
 {
-   return this->pointerRef != NULL && address >= this->start() && address <= this->end();
+   return this->inRange(offset) && this->sizeRef != NULL && offset >= *this->offsetRef && offset <= (*this->offsetRef + *this->sizeRef);
 }
+
+bool
+Memory::inRange
+(SIZE_T offset)
+{
+   if (this->pointerRef == NULL || *this->pointerRef == NULL)
+      throw NullPointerException();
+
+   if (this->parent != NULL)
+      return this->inRange((LPVOID)((LPBYTE)this->parent->pointer() + *this->offsetRef + offset));
+
+   return this->inRange((LPVOID)((LPBYTE)*this->pointerRef + offset));
+}
+   
 
 bool
 Memory::inRange
 (LPVOID address, SIZE_T size)
 {
    LPBYTE calcAddress = (LPBYTE)address+size;
-   
+
    return this->inRange(address) && calcAddress >= this->start() && calcAddress <= this->end();
+}
+
+bool
+Memory::inRange
+(LPVOID address)
+{
+   return this->pointerRef != NULL && address >= this->start() && address <= this->end();
 }
 
 void
 Memory::setPointer
 (LPVOID base)
 {
-   if (this->pointerRef == NULL)
-      this->pointerRef = new LPVOID;
+   if (this->parent != NULL)
+   {
+      if (this->offsetRef == NULL)
+         this->offsetRef = new SIZE_T;
 
-   *this->pointer = base;
+      *this->offsetRef = this->parent->offset(base);
+   }
+   else
+   {
+      if (this->pointerRef == NULL)
+         this->pointerRef = new LPVOID;
+
+      *this->pointerRef = base;
+   }
+}
+
+void
+Memory::setOffset
+(SIZE_T offset)
+{
+   if (this->parent == NULL)
+      throw OffsetWithoutParentException(this);
+   else
+   {
+      if (this->offsetRef == NULL)
+         this->offsetRef = new SIZE_T;
+
+      *this->offsetRef = offset;
+   }
 }
 
 void
@@ -325,6 +762,16 @@ Memory::setSize
       this->sizeRef = new SIZE_T;
 
    *this->sizeRef = size;
+}
+
+void
+Memory::setMode
+(Mode mode)
+{
+   if (this->modeRef == NULL)
+      this->modeRef = new Mode;
+
+   *this->modeRef = mode;
 }
 
 Data
@@ -352,7 +799,7 @@ Memory::read
    {
       return this->read(this->pointer(offset), size);
    }
-   catch (AddressOutOfBoundsException &exception)
+   catch (PointerOutOfBoundsException &exception)
    {
       throw OffsetOutOfBoundsException(exception.memory, offset, exception.size);
    }
@@ -367,8 +814,10 @@ Memory::read
    if (this->pointerRef == NULL || *this->pointerRef == NULL)
       throw NullPointerException();
 
+   if (!this->readable())
+
    if (!this->inRange(address, size))
-      throw AddressOutOfBoundsException(this, address, size);
+      throw PointerOutOfBoundsException(this, address, size);
 
    if (size == 0)
       return result;
@@ -382,7 +831,7 @@ Memory::read
    }
    __except(EXCEPTION_EXECUTE_HANDLER)
    {
-      throw BadPointerException(address, size);
+      throw BadPointerException(this, address, size, Memory::Mode::READ);
    }
 
    return result;
@@ -415,9 +864,9 @@ Memory::write
 {
    try
    {
-      this->write(this->pointerAddress(offset), data);
+      this->write(this->pointer(offset), data);
    }
-   catch (AddressOutOfBoundsException &exception)
+   catch (PointerOutOfBoundsException &exception)
    {
       throw OffsetOutOfBoundsException(exception.memory, offset, exception.size);
    }
@@ -438,7 +887,7 @@ Memory::write
       throw NullPointerException();
 
    if (!this->inRange(address, data.size()))
-      throw AddressOutOfBoundsException(this, address, data.size());
+      throw PointerOutOfBoundsException(this, address, data.size());
 
    if (data.size() == 0)
       return;
@@ -452,7 +901,7 @@ Memory::write
    }
    __except (EXCEPTION_EXECUTE_HANDLER)
    {
-      throw BadPointerException(address, data.size());
+      throw BadPointerException(this, address, data.size(), Memory::Mode::WRITE);
    }
 }
 
@@ -481,7 +930,7 @@ Address::Address
    if (memory == NULL)
       throw NullPointerException();
 
-   if (!memory->inRange(memory->pointerAddress(offset)))
+   if (!memory->inRange(memory->pointer(offset)))
       throw OffsetOutOfBoundsException(memory, offset, 0);
 
    this->memory = memory;
@@ -513,6 +962,28 @@ Address::~Address
    this->offset = 0;
 }
 
+Address
+Address::operator+
+(__int64 offset)
+{
+   Address newAddress = *this;
+
+   newAddress.shift(offset);
+   
+   return newAddress;
+}
+
+Address
+Address::operator-
+(__int64 offset)
+{
+   Address newAddress = *this;
+
+   newAddress.shift(-offset);
+   
+   return newAddress;
+}
+
 LPVOID
 Address::pointer
 (void)
@@ -531,7 +1002,14 @@ Address::pointer
 
    return this->memory->pointer(this->offset + offset);
 }
-   
+
+SIZE_T
+Address::getOffset
+(void)
+{
+   return this->offset;
+}
+
 Data
 Address::read
 (SIZE_T size)
@@ -550,9 +1028,9 @@ Address::read
    {
       return this->memory->read(this->pointer(this->offset+offset), size);
    }
-   catch (AddressOutOfBoundsException &exception)
+   catch (PointerOutOfBoundsException &exception)
    {
-      throw OffsetOutOfBoundsException(exception.memory, this->offset+offset, size);
+      throw OffsetOutOfBoundsException(exception.memory, this->offset+offset, exception.size);
    }
 }
 
@@ -574,8 +1052,42 @@ Address::write
    {
       this->memory->write(this->pointer(this->offset+offset), data);
    }
-   catch (AddressOutOfBoundsException &exception)
+   catch (PointerOutOfBoundsException &exception)
    {
-      throw OffsetOutOfBoundsException(exception.memory, this->offset+offset, data.size());
+      throw OffsetOutOfBoundsException(exception.memory, this->offset+offset, exception.size);
    }
+}
+
+void
+Address::shift
+(__int64 offset)
+{
+   __int64 newOffset = (__int64)this->offset + offset;
+   Memory *parent = this->memory;
+
+   if (parent == NULL)
+      throw NullPointerException();
+
+   while (parent != NULL && newOffset < 0)
+   {
+      newOffset += parent->offset();
+      parent = parent->getParent();
+   }
+
+   if (parent == NULL)
+      throw NegativeOffsetException(this->memory, offset);
+
+   while (parent != NULL && (newOffset > parent->size() || !parent->inRange(parent->pointer(newOffset))
+   {
+      newOffset += parent->offset();
+      parent = parent->getParent();
+   }
+
+   if (parent == NULL)
+      throw OffsetOutOfBoundsException(this->memory, (SIZE_T)offset, 0);
+
+   this->memory->deref();
+   this->memory = parent;
+   this->memory->ref();
+   this->offset = (SIZE_T)newOffset;
 }

@@ -13,46 +13,130 @@ namespace Neurology
 #define PointerData(ptr) Data((LPBYTE)(ptr), (LPBYTE)((ptr)+1))
 #define BlockData(ptr, size) Data((LPBYTE)(ptr), ((LPBYTE)(ptr))+size)
 
-   class NullPointerException : public NeurologyException
+   class MemoryException : public NeurologyException
    {
    public:
-      NullPointerException(void);
-      NullPointerException(NullPointerException &exception);
+      Memory *memory;
+
+      MemoryException(Memory *memory, const LPWSTR message);
+      MemoryException(MemoryException &exception);
+      ~MemoryException(void);
    };
 
-   class BadPointerException : public NeurologyException
+   class BadModeException : public MemoryException
    {
    public:
-      LPVOID address;
-      SIZE_T size;
+      Memory::Mode mode;
 
-      BadPointerException(LPVOID address, SIZE_T size);
+      BadModeException(Memory *memory, Memory::Mode mode);
+      BadModeException(BadModeException &exception);
+   };
+
+   class BadPointerException : public MemoryException
+   {
+   public:
+      LPVOID pointer;
+      SIZE_T size;
+      Memory::Mode op;
+
+      BadPointerException(Memory *memory, LPVOID pointer, SIZE_T size, Memory::Mode operation);
       BadPointerException(BadPointerException &exception);
    };
 
-   class AddressOutOfBoundsException : public NeurologyException
+   class PointerOutOfBoundsException : public MemoryException
    {
    public:
-      Memory *memory;
-      LPVOID address;
+      LPVOID pointer;
       SIZE_T size;
 
-      AddressOutOfBoundsException(Memory *memory, LPVOID address, SIZE_T size);
-      AddressOutOfBoundsException(AddressOutOfBoundsException &exception);
+      PointerOutOfBoundsException(Memory *memory, LPVOID pointer, SIZE_T size);
+      PointerOutOfBoundsException(PointerOutOfBoundsException &exception);
    };
 
-   class OffsetOutOfBoundsException : public NeurologyException
+   class OffsetOutOfBoundsException : public MemoryException
    {
    public:
-      Memory *memory;
       SIZE_T offset, size;
       
       OffsetOutOfBoundsException(Memory *memory, SIZE_T offset, SIZE_T size);
       OffsetOutOfBoundsException(OffsetOutOfBoundsException &exception);
    };
+
+   class PointerWithParentException : public MemoryException
+   {
+   public:
+      PointerWithParentException(Memory *memory);
+      PointerWithParentException(PointerWithParentException &exception);
+   };
+
+   class OffsetWithoutParentException : public MemoryException
+   {
+   public:
+      OffsetWithoutParentException(Memory *memory);
+      OffsetWithoutParentException(OffsetWithoutParentException &exception);
+   };
+
+   class NegativeOffsetException : public MemoryException
+   {
+   public:
+      __int64 offset;
+
+      NegativeOffsetException(Memory *memory, __int64 offset);
+      NegativeOffsetException(NegativeOffsetException &exception);
+   };
    
    class Memory
    {
+   public:
+      class Mode
+      {
+      public:
+         const static BYTE READ = 0x4;
+         const static BYTE WRITE = 0x2;
+         const static BYTE EXECUTE = 0x1;
+
+         union
+         {
+            struct
+            {
+               BYTE padding:5, read:1, write:1, execute:1;
+            };
+            BYTE flags;
+         };
+
+      public:
+         Mode(void);
+         Mode(bool read, bool write, bool execute);
+         Mode(BYTE flags);
+         Mode(Mode &mode);
+
+         void operator=(BYTE flags);
+         
+         Mode operator&(BYTE mask);
+         Mode operator&(Mode mask);
+         Mode operator|(BYTE mask);
+         Mode operator|(Mode mask);
+         Mode operator^(BYTE mask);
+         Mode operator^(Mode mask);
+         
+         void operator&=(BYTE mask);
+         void operator&=(Mode mask);
+         void operator|=(BYTE mask);
+         void operator|=(Mode mask);
+         void operator^=(BYTE mask);
+         void operator^=(Mode mask);
+
+         static BYTE Flags(bool read, bool write, bool execute);
+
+         void markReadable(void);
+         void markWritable(void);
+         void markExecutable(void);
+
+         void unmarkReadable(void);
+         void unmarkWritable(void);
+         void unmarkExecutable(void);
+      };
+
    protected:
       Memory *parent;
       
@@ -63,35 +147,57 @@ namespace Neurology
       };
       
       SIZE_T *sizeRef;
+      Mode *modeRef;
       LPDWORD refCount;
 
    public:
       Memory(void);
-      Memory(LPVOID pointer, SIZE_T size);
-      Memory(Memory *parent, SIZE_T offset, SIZE_T size);
+      Memory(LPVOID pointer, SIZE_T size, Mode mode);
+      Memory(Memory *parent, SIZE_T offset, SIZE_T size, Mode mode);
       Memory(Memory &memory);
       ~Memory(void);
 
+      Memory *getParent(void);
+      
+      /* reference data */
       void ref(void);
       void deref(void);
       DWORD refs(void);
-      bool isNull(void);
-      bool isValid(void);
-      void invalidate(void);
+      virtual bool isNull(void);
+      virtual bool isValid(void);
+      virtual void invalidate(void);
+
+      /* mode data */
+      Mode mode(void);
+      bool readable(void);
+      bool writable(void);
+      bool executable(void);
+      virtual void markReadable(void);
+      virtual void markWritable(void);
+      virtual void markExecutable(void);
+      virtual void unmarkReadable(void);
+      virtual void unmarkWritable(void);
+      virtual void unmarkExecutable(void);
+      virtual void setModeFlags(BYTE flags);
 
       SIZE_T size(void);
-      Address address(void);
-      Address address(SIZE_T offset);
+      Mode mode(void);
+      virtual Address address(void);
+      virtual Address address(SIZE_T offset);
       LPVOID pointer(void);
       LPVOID pointer(SIZE_T offset);
+      SIZE_T offset(void);
       SIZE_T offset(LPVOID address);
       LPVOID start(void);
       LPVOID end(void);
-      bool inRange(LPVOID address);
+      bool inRange(SIZE_T offset, SIZE_T size);
+      bool inRange(SIZE_T offset);
       bool inRange(LPVOID address, SIZE_T size);
+      virtual bool inRange(LPVOID address);
       virtual void setPointer(LPVOID base);
       virtual void setOffset(SIZE_T offset);
       virtual void setSize(SIZE_T size);
+      virtual void setMode(Mode mode);
       Data read(void);
       Data read(SIZE_T size);
       Data read(SIZE_T offset, SIZE_T size);
@@ -117,12 +223,17 @@ namespace Neurology
       Address(Address &address);
       ~Address(void);
 
+      Address operator+(__int64 offset);
+      Address operator-(__int64 offset);
+
       LPVOID pointer(void);
       LPVOID pointer(SIZE_T offset);
+      SIZE_T getOffset(void);
       Data read(SIZE_T size);
       Data read(SIZE_T offset, SIZE_T size);
       void write(Data data);
       void write(SIZE_T offset, Data data);
+      void shift(__int64 offset);
    };
 
    template <class Type>
