@@ -2,60 +2,74 @@
 
 #include <windows.h>
 
-#include <map>
+#include <set>
 
 #include <neurology/exception.hpp>
 #include <neurology/memory.hpp>
 
 namespace Neurology
 {
-   class NullProcessException : public NeurologyException
+   class ProcessException : public NeurologyException
+   {
+   public:
+      Process *process;
+
+   public:
+      ProcessException(Process *process, const LPWSTR message);
+      ProcessException(ProcessException &exception);
+   };
+
+   class NullProcessException : public ProcessException
    {
    public:
       NullProcessException(void);
       NullProcessException(NullProcessException &exception);
    };
 
-   class ProcessMemory;
+   class Page : public Memory
+   {
+   protected:
+      Book *binding;
+      
+   public:
+      Page(void);
+      Page(Book *binding, LPVOID address, SIZE_T size, Memory::Mode mode);
+      Page(Page &memory);
+   };
+   
+   class Book
+   {
+   protected:
+      Process *process;
+      std::map<LPVOID, Page> pages;
+
+   public:
+      Book(void);
+      Book(Process *process);
+      Book(Book &book);
+   };
    
    class Process
    {
    public:
-      static Process CurrentProcess;
-      const static DWORD CURRENT_PROCESS_HANDLE = 0xFFFFFFFF;
+      static Process Current;
+      const static HANDLE CURRENT_PROCESS_HANDLE = (HANDLE)0xFFFFFFFF;
 
    protected:
       HANDLE handle;
+      Book memory;
 
    public:
       Process(void);
       Process(HANDLE processHandle);
+      Process(DWORD processID);
+      Process(BOOL inheritHandle, DWORD processID);
       Process(DWORD desiredAccess, BOOL inheritHandle, DWORD processID);
       Process(Process &process);
 
-      DWORD pid(void);
       void openProcess(DWORD desiredAccess, BOOL inheritHandle, DWORD processID);
+      DWORD pid(void);
       HANDLE getHandle(void);
       Data read(LPVOID address, SIZE_T size);
-   };
-
-   class ProcessMemory;
-   
-   class ProcessMemoryManager : public Memory
-   {
-   protected:
-      Process *process;
-      std::map<Address, ProcessMemory> memory;
-   };
-
-   class ProcessMemory : public Memory
-   {
-   protected:
-      ProcessMemoryManager *manager;
-
-   public:
-      ProcessMemory(void);
-      ProcessMemory(Process *process, LPVOID address, SIZE_T size);
-      ProcessMemory(ProcessMemory &memory);
    };
 }
