@@ -3,20 +3,28 @@
 using namespace Neurology;
 
 ReferenceException::ReferenceException
-(const LPWSTR message)
-   : NeurologyException(message)
+(const Reference &reference, const LPWSTR message)
+   : reference(reference)
+   , NeurologyException(message)
+{
+}
+
+ReferenceException::ReferenceException
+(ReferenceException &exception)
+   : reference(exception.reference)
+   , NeurologyException(exception)
 {
 }
 
 NullReferenceException::NullReferenceException
-(void)
-   : ReferenceException(EXCSTR(L"The reference counter is null."))
+(const Reference &reference)
+   : ReferenceException(reference, EXCSTR(L"The reference counter is null."))
 {
 }
 
 DoubleAllocationException::DoubleAllocationException
-(void)
-   : ReferenceException(EXCSTR(L"The reference was already allocated."))
+(const Reference &reference)
+   : ReferenceException(reference, EXCSTR(L"The reference was already allocated."))
 {
 }
 
@@ -46,7 +54,7 @@ Reference::~Reference
 
 DWORD
 Reference::refs
-(void)
+(void) const
 {
    if (this->refCount == NULL)
       return 0;
@@ -59,7 +67,7 @@ Reference::ref
 (void)
 {
    if (this->refCount == NULL)
-      throw NullReferenceException();
+      throw NullReferenceException(*this);
 
    ++*this->refCount;
 }
@@ -69,7 +77,7 @@ Reference::deref
 (void)
 {
    if (this->refCount == NULL)
-      throw NullReferenceException();
+      throw NullReferenceException(*this);
 
    --*this->refCount;
 
@@ -79,7 +87,7 @@ Reference::deref
 
 bool
 Reference::isNull
-(void)
+(void) const
 {
    return this->refCount == NULL;
 }
@@ -89,7 +97,7 @@ Reference::allocate
 (void)
 {
    if (this->refCount != NULL)
-      throw DoubleAllocationException();
+      throw DoubleAllocationException(*this);
    
    this->refCount = new DWORD;
    *this->refCount = 1;
@@ -100,7 +108,7 @@ Reference::release
 (void)
 {
    if (this->refCount == NULL)
-      throw NullReferenceException();
+      throw NullReferenceException(*this);
 
    *this->refCount = 0;
    delete this->refCount;

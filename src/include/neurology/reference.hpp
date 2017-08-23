@@ -9,19 +9,22 @@ namespace Neurology
    class ReferenceException : public NeurologyException
    {
    public:
-      ReferenceException(const LPWSTR message);
+      const Reference &reference;
+      
+      ReferenceException(const Reference &reference, const LPWSTR message);
+      ReferenceException(ReferenceException &exception);
    };
    
    class NullReferenceException : public ReferenceException
    {
    public:
-      NullReferenceException(void);
+      NullReferenceException(const Reference &reference);
    };
    
    class DoubleAllocationException : public ReferenceException
    {
    public:
-      DoubleAllocationException(void);
+      DoubleAllocationException(const Reference &reference);
    };
    
    /* for objects that require this kind of design pattern. basically, this is a way to make
@@ -37,10 +40,10 @@ namespace Neurology
       Reference(Reference &reference);
       ~Reference(void);
 
-      DWORD refs(void);
+      DWORD refs(void) const;
       void ref(void);
       void deref(void);
-      virtual bool isNull(void);
+      virtual bool isNull(void) const;
 
    protected:
       virtual void allocate(void);

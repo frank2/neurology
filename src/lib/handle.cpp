@@ -21,3 +21,10 @@ HandleException::HandleException
 
    if (this->handle != NULL)
       this->handle->ref();
+}
+
+HandleException::~HandleException
+(void)
+{
+   if (this->handle != NULL)
+      this->handle->deref();

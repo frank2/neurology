@@ -15,6 +15,7 @@ namespace Neurology
    public:
       HandleException(Handle *handle, const LPWSTR message);
       HandleException(HandleException &exception);
+      ~HandleException(void);
    };
 
    class NullHandleException : public HandleException
