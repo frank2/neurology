@@ -75,6 +75,12 @@
     <ClInclude Include="..\..\src\include\neurology\security.hpp">
       <Filter>Header Files\neurology</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\src\include\neurology\reference.hpp">
+      <Filter>Header Files\neurology</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\include\neurology\handle.hpp">
+      <Filter>Header Files\neurology</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\lib\exception.cpp">
@@ -111,6 +117,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\lib\security.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\lib\reference.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\lib\handle.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

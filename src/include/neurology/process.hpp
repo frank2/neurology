@@ -5,6 +5,7 @@
 #include <set>
 
 #include <neurology/exception.hpp>
+#include <neurology/handle.hpp>
 #include <neurology/memory.hpp>
 
 namespace Neurology
@@ -56,7 +57,6 @@ namespace Neurology
       const static HANDLE CURRENT_PROCESS_HANDLE = (HANDLE)0xFFFFFFFF;
 
    protected:
-      HANDLE handle;
       Book memory;
 
    public:

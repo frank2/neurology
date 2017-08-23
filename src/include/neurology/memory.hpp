@@ -5,6 +5,7 @@
 #include <vector>
 
 #include <neurology/exception.hpp>
+#include <neurology/reference.hpp>
 
 namespace Neurology
 {
@@ -12,6 +13,12 @@ namespace Neurology
 #define VarData(var) Data((LPBYTE)(&(var)), (LPBYTE)((&(var))+1))
 #define PointerData(ptr) Data((LPBYTE)(ptr), (LPBYTE)((ptr)+1))
 #define BlockData(ptr, size) Data((LPBYTE)(ptr), ((LPBYTE)(ptr))+size)
+
+   class BadReferenceStateException : public ReferenceException
+   {
+   public:
+      BadReferenceStateException(void);
+   };
 
    class MemoryException : public NeurologyException
    {
@@ -127,6 +134,8 @@ namespace Neurology
          void operator^=(Mode mask);
 
          static BYTE Flags(bool read, bool write, bool execute);
+         BYTE getFlags(void);
+         void setFlags(BYTE flags);
 
          void markReadable(void);
          void markWritable(void);
@@ -137,25 +146,56 @@ namespace Neurology
          void unmarkExecutable(void);
       };
 
+      class Reference : public Neurology::Reference
+      {
+      public:
+         const static bool STATE_POINTER = false;
+         const static bool STATE_OFFSET = true;
+         
+      protected:
+         bool state;
+         
+         union
+         {
+            LPVOID *pointerRef;
+            SIZE_T *offsetRef;
+         };
+
+         SIZE_T *sizeRef;
+         Mode *modeRef;
+
+      public:
+         Reference(void);
+         Reference(LPVOID pointer, SIZE_T size, Mode mode);
+         Reference(SIZE_T offset, SIZE_T size, Mode mode);
+         Reference(Reference &reference);
+
+         bool isNull(void);
+         bool state(void);
+         void setState(bool state);
+         LPVOID pointer(void);
+         void setPointer(LPVOID pointer);
+         SIZE_T offset(void);
+         void setOffset(SIZE_T offset);
+         SIZE_T size(void);
+         void setSize(SIZE_T size);
+         Mode mode(void);
+         void setMode(Mode mode);
+
+      protected:
+         void allocate(void);
+         void release(void);
+      };
+
    protected:
       Memory *parent;
-      
-      union
-      {
-         LPVOID *pointerRef;
-         SIZE_T *offsetRef;
-      };
-      
-      SIZE_T *sizeRef;
-      Mode *modeRef;
-      LPDWORD refCount;
+      Memory::Reference reference;
 
    public:
       Memory(void);
       Memory(LPVOID pointer, SIZE_T size, Mode mode);
       Memory(Memory *parent, SIZE_T offset, SIZE_T size, Mode mode);
       Memory(Memory &memory);
-      ~Memory(void);
 
       Memory *getParent(void);
       
@@ -163,8 +203,8 @@ namespace Neurology
       void ref(void);
       void deref(void);
       DWORD refs(void);
-      virtual bool isNull(void);
-      virtual bool isValid(void);
+      bool isNull(void);
+      bool isValid(void);
       virtual void invalidate(void);
 
       /* mode data */
@@ -172,13 +212,12 @@ namespace Neurology
       bool readable(void);
       bool writable(void);
       bool executable(void);
-      virtual void markReadable(void);
-      virtual void markWritable(void);
-      virtual void markExecutable(void);
-      virtual void unmarkReadable(void);
-      virtual void unmarkWritable(void);
-      virtual void unmarkExecutable(void);
-      virtual void setModeFlags(BYTE flags);
+      void markReadable(void);
+      void markWritable(void);
+      void markExecutable(void);
+      void unmarkReadable(void);
+      void unmarkWritable(void);
+      void unmarkExecutable(void);
 
       SIZE_T size(void);
       Mode mode(void);
@@ -225,6 +264,8 @@ namespace Neurology
 
       Address operator+(__int64 offset);
       Address operator-(__int64 offset);
+      void operator+=(__int64 offset);
+      void operator-=(__int64 offset);
 
       LPVOID pointer(void);
       LPVOID pointer(SIZE_T offset);

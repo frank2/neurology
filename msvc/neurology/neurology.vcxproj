@@ -148,6 +148,7 @@
     <ClInclude Include="..\..\src\include\neurology.hpp" />
     <ClInclude Include="..\..\src\include\neurology\configuration.hpp" />
     <ClInclude Include="..\..\src\include\neurology\exception.hpp" />
+    <ClInclude Include="..\..\src\include\neurology\handle.hpp" />
     <ClInclude Include="..\..\src\include\neurology\heap.hpp" />
     <ClInclude Include="..\..\src\include\neurology\memory.hpp" />
     <ClInclude Include="..\..\src\include\neurology\pe.hpp" />
@@ -158,11 +159,13 @@
     <ClInclude Include="..\..\src\include\neurology\pe\optional.hpp" />
     <ClInclude Include="..\..\src\include\neurology\pe\section.hpp" />
     <ClInclude Include="..\..\src\include\neurology\process.hpp" />
+    <ClInclude Include="..\..\src\include\neurology\reference.hpp" />
     <ClInclude Include="..\..\src\include\neurology\security.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\lib\configuration.cpp" />
     <ClCompile Include="..\..\src\lib\exception.cpp" />
+    <ClCompile Include="..\..\src\lib\handle.cpp" />
     <ClCompile Include="..\..\src\lib\heap.cpp" />
     <ClCompile Include="..\..\src\lib\memory.cpp" />
     <ClCompile Include="..\..\src\lib\pe\dos.cpp" />
@@ -172,6 +175,7 @@
     <ClCompile Include="..\..\src\lib\pe\optional.cpp" />
     <ClCompile Include="..\..\src\lib\pe\section.cpp" />
     <ClCompile Include="..\..\src\lib\process.cpp" />
+    <ClCompile Include="..\..\src\lib\reference.cpp" />
     <ClCompile Include="..\..\src\lib\security.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
