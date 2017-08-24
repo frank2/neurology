@@ -6,6 +6,8 @@
 
 namespace Neurology
 {
+   class Reference;
+   
    class ReferenceException : public NeurologyException
    {
    public:
@@ -26,6 +28,20 @@ namespace Neurology
    public:
       DoubleAllocationException(const Reference &reference);
    };
+
+   class SlaughteredReferenceException : public ReferenceException
+   {
+   public:
+      const Reference &suspect;
+      
+      SlaughteredReferenceException(const Reference &reference, const Reference &suspect);
+   };
+
+   class ConstMismatchException : public ReferenceException
+   {
+   public:
+      ConstMismatchException(const Reference &reference);
+   };
    
    /* for objects that require this kind of design pattern. basically, this is a way to make
       sure that dynamic objects, such as memory addresses, are consistent across multiple objects
@@ -34,16 +50,23 @@ namespace Neurology
    {
    protected:
       LPDWORD refCount;
-
+      bool constReference;
+      
    public:
       Reference(void);
       Reference(Reference &reference);
+      Reference(const Reference &reference);
       ~Reference(void);
 
+      virtual void operator=(Reference &reference);
+      virtual void operator=(const Reference &reference);
+
       DWORD refs(void) const;
-      void ref(void);
-      void deref(void);
+      virtual void ref(void);
+      virtual void deref(void);
       virtual bool isNull(void) const;
+      bool isConst(void) const;
+      void throwIfNull(void) const;
 
    protected:
       virtual void allocate(void);

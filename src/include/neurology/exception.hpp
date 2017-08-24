@@ -18,7 +18,6 @@ namespace Neurology
       
    public:
       NeurologyException(const LPWSTR message);
-      NeurologyException(NeurologyException &exception);
    };
 
    class Win32Exception : public NeurologyException
@@ -28,7 +27,6 @@ namespace Neurology
 
       Win32Exception(const LPWSTR message);
       Win32Exception(DWORD error, const LPWSTR message);
-      Win32Exception(Win32Exception &exception);
    };
 
    class NullPointerException : public NeurologyException
@@ -36,6 +34,5 @@ namespace Neurology
    public:
       NullPointerException(void);
       NullPointerException(const LPWSTR message);
-      NullPointerException(NullPointerException &exception);
    };
 }

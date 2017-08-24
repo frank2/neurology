@@ -23,7 +23,7 @@ namespace Neurology
    class MemoryException : public NeurologyException
    {
    public:
-      Memory &memory;
+      Memory memory;
 
       MemoryException(Memory &memory, const LPWSTR message);
       MemoryException(MemoryException &exception);
@@ -107,7 +107,7 @@ namespace Neurology
             {
                BYTE padding:5, read:1, write:1, execute:1;
             };
-            BYTE flags;
+            BYTE modeFlags;
          };
 
       public:
@@ -115,25 +115,29 @@ namespace Neurology
          Mode(bool read, bool write, bool execute);
          Mode(BYTE flags);
          Mode(Mode &mode);
+         Mode(const Mode &mode);
 
+         operator int(void) const;
+
+         void operator=(const Mode &mode);
          void operator=(BYTE flags);
          
          Mode operator&(BYTE mask) const;
-         Mode operator&(Mode mask) const;
+         Mode operator&(const Mode mask) const;
          Mode operator|(BYTE mask) const;
-         Mode operator|(Mode mask) const;
+         Mode operator|(const Mode mask) const;
          Mode operator^(BYTE mask) const;
-         Mode operator^(Mode mask) const;
+         Mode operator^(const Mode mask) const;
          
          void operator&=(BYTE mask);
-         void operator&=(Mode mask);
+         void operator&=(const Mode mask);
          void operator|=(BYTE mask);
-         void operator|=(Mode mask);
+         void operator|=(const Mode mask);
          void operator^=(BYTE mask);
-         void operator^=(Mode mask);
+         void operator^=(const Mode mask);
 
-         static BYTE Flags(bool read, bool write, bool execute);
-         BYTE getFlags(void) const;
+         static BYTE MakeFlags(bool read, bool write, bool execute);
+         BYTE flags(void) const;
          void setFlags(BYTE flags);
 
          void markReadable(void);
@@ -167,13 +171,15 @@ namespace Neurology
          Reference(void);
          Reference(LPVOID pointer, SIZE_T size, Mode mode);
          Reference(SIZE_T offset, SIZE_T size, Mode mode);
-         Reference(Reference &reference);
 
-         bool isNull(void) const;
+         virtual void operator=(Reference &reference);
+         virtual void operator=(const Reference &reference);
+
+         virtual bool isNull(void) const;
+         bool isNullAddress(void) const;
          bool state(void) const;
          void setState(bool state);
-         LPVOID pointer(void);
-         const LPVOID pointer(void) const;
+         LPVOID pointer(void) const;
          void setPointer(LPVOID pointer);
          SIZE_T offset(void) const;
          void setOffset(SIZE_T offset);
@@ -183,28 +189,31 @@ namespace Neurology
          void setMode(Mode mode);
 
       protected:
-         void allocate(void);
-         void release(void);
+         virtual void allocate(void);
+         virtual void release(void);
       };
 
    protected:
-      Memory &parent;
+      Memory *parent;
       Memory::Reference reference;
 
    public:
       Memory(void);
       Memory(LPVOID pointer, SIZE_T size, Mode mode);
-      Memory(Memory &parent, SIZE_T offset, SIZE_T size, Mode mode);
+      Memory(Memory *parent, SIZE_T offset, SIZE_T size, Mode mode);
       Memory(Memory &memory);
 
-      Memory &getParent(void);
-      const Memory &getParent(void) const;
+      void operator=(Memory &memory);
+
+      Memory *getParent(void);
+      const Memory *getParent(void) const;
       
       /* reference data */
       void ref(void);
       void deref(void);
       DWORD refs(void) const;
       bool isNull(void) const;
+      bool isNullAddress(void) const;
       bool isValid(void) const;
       virtual void invalidate(void);
 
@@ -221,21 +230,16 @@ namespace Neurology
       void unmarkExecutable(void);
 
       SIZE_T size(void) const;
-      Mode mode(void) const;
       virtual Address address(void);
       virtual const Address address(void) const;
       virtual Address address(SIZE_T offset);
-      virtual const Address address(void) const;
-      LPVOID pointer(void);
-      const LPVOID pointer(void) const;
-      LPVOID pointer(SIZE_T offset);
-      const LPVOID pointer(SIZE_T offset) const;
+      virtual const Address address(SIZE_T offset) const;
+      LPVOID pointer(void) const;
+      LPVOID pointer(SIZE_T offset) const;
       SIZE_T offset(void) const;
       SIZE_T offset(LPVOID address) const;
-      LPVOID start(void);
-      const LPVOID start(void) const;
-      LPVOID end(void);
-      const LPVOID end(void) const;
+      LPVOID start(void) const;
+      LPVOID end(void) const;
       bool inRange(SIZE_T offset, SIZE_T size) const;
       bool inRange(SIZE_T offset) const;
       bool inRange(LPVOID address, SIZE_T size) const;
@@ -244,20 +248,21 @@ namespace Neurology
       virtual void setOffset(SIZE_T offset);
       virtual void setSize(SIZE_T size);
       virtual void setMode(Mode mode);
-      Data read(void);
       Data read(void) const;
-      Data read(SIZE_T size);
       Data read(SIZE_T size) const;
-      Data read(SIZE_T offset, SIZE_T size);
       Data read(SIZE_T offset, SIZE_T size) const;
-      virtual Data read(LPVOID address, SIZE_T size);
       virtual Data read(LPVOID address, SIZE_T size) const;
-      void write(Memory *region);
+      void write(Memory region);
       void write(Data data);
-      void write(SIZE_T offset, Memory *region);
+      void write(SIZE_T offset, const Memory region);
       void write(SIZE_T offset, Data data);
-      void write(LPVOID address, Memory *region);
+      void write(LPVOID address, const Memory region);
       virtual void write(LPVOID address, Data data);
+
+      Memory slice(SIZE_T start, SIZE_T end);
+      const Memory slice(SIZE_T start, SIZE_T end) const;
+      Memory slice(LPVOID start, LPVOID end);
+      const Memory slice(LPVOID start, LPVOID end) const;
    };
 
    class Address
@@ -271,21 +276,25 @@ namespace Neurology
       Address(Memory *memory);
       Address(Memory *memory, SIZE_T offset);
       Address(Address &address);
+      Address(const Address &address);
       ~Address(void);
 
+      void operator=(Address &address);
+      void operator=(const Address &address);
+
+      bool operator==(const Address &address) const;
+      bool operator==(LPVOID pointer) const;
+      
       Address operator+(__int64 offset) const;
       Address operator-(__int64 offset) const;
       void operator+=(__int64 offset);
       void operator-=(__int64 offset);
 
+      bool isNull(void) const;
       LPVOID pointer(void);
-      const LPVOID pointer(void) const;
       LPVOID pointer(SIZE_T offset);
-      const LPVOID pointer(SIZE_T offset) const;
       SIZE_T getOffset(void) const;
-      Data read(SIZE_T size);
       Data read(SIZE_T size) const;
-      Data read(SIZE_T offset, SIZE_T size);
       Data read(SIZE_T offset, SIZE_T size) const;
       void write(Data data);
       void write(SIZE_T offset, Data data);
@@ -347,11 +356,9 @@ namespace Neurology
          CopyMemory(this->cache.data(), type, this->size);
       }
       
-      Object(Object &pointer)
+      Object(Object &object)
       {
-         this->address = pointer.address;
-         this->size = pointer.size;
-         this->cache = pointer.cache;
+         *this = object;
       }
 
       ~Object(void)
@@ -369,7 +376,7 @@ namespace Neurology
          this->data = Data();
       }
 
-      void save(void)
+      virtual void save(void)
       {
          if (this->address == NULL)
             throw NullPointerException();
@@ -431,6 +438,13 @@ namespace Neurology
       const Type *operator*(void) const
       {
          return this->resolve();
+      }
+
+      virtual void operator=(Object &object)
+      {
+         this->address = object.address;
+         this->size = object.size;
+         this->cache = object.cache;
       }
       
       virtual void operator=(Type object)

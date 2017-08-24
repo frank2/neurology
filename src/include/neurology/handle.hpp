@@ -9,20 +9,24 @@ namespace Neurology
 {
    class HandleException : public NeurologyException
    {
-   protected:
-      Handle *handle;
-
    public:
-      HandleException(Handle *handle, const LPWSTR message);
-      HandleException(HandleException &exception);
-      ~HandleException(void);
+      Handle handle;
+
+      HandleException(Handle &handle, const LPWSTR message);
    };
 
    class NullHandleException : public HandleException
    {
    public:
-      NullHandleException(Handle *handle);
-      NullHandleException(NullHandleException &exception);
+      NullHandleException(Handle &handle);
+   };
+
+   class HandleTypeMismatchException : public HandleException
+   {
+   public:
+      Handle otherHandle;
+
+      HandleTypeMismatchException(Handle &handle, Handle &otherHandle);
    };
    
    class Handle
@@ -36,14 +40,21 @@ namespace Neurology
       public:
          Reference(void);
          Reference(HANDLE handle);
-         Reference(Reference &reference);
 
-         HANDLE handle(void);
+         virtual void operator=(Reference &reference);
+         virtual void operator=(HANDLE handle);
+
+         virtual bool isNull(void) const;
+         bool hasNullHandle(void) const;
+         
+         HANDLE handle(void) const;
          void setHandle(HANDLE handle);
 
+         void close(void);
+
       protected:
-         void allocate(void);
-         void release(void);
+         virtual void allocate(void);
+         virtual void release(void);
       };
       
    protected:
@@ -52,20 +63,25 @@ namespace Neurology
 
    public:
       Handle(void);
+      Handle(HANDLE handle);
       Handle(HANDLE handle, SE_OBJECT_TYPE objectType);
       Handle(Handle &handle);
       ~Handle(void);
 
-      void ref(void);
-      void deref(void);
-      DWORD refs(void);
-      bool isNull(void);
-      void invalidate(void);
+      virtual void operator=(Handle &handle);
+      virtual void operator=(HANDLE handle);
 
-      HANDLE handle(void);
-      void setHandle(HANDLE handle);
-      SE_OBJECT_TYPE type(void);
-      void setType(SE_OBJECT_TYPE type);
+      virtual void ref(void);
+      virtual void deref(void);
+      DWORD refs(void) const;
+      bool isNull(void) const;
+      bool hasNullHandle(void) const;
       void close(void);
+
+      HANDLE handle(void) const;
+      void setHandle(HANDLE handle);
+      void setHandle(HANDLE handle, SE_OBJECT_TYPE objectType);
+      SE_OBJECT_TYPE type(void) const;
+      void setType(SE_OBJECT_TYPE type);
    };
 }

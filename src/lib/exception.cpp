@@ -8,12 +8,6 @@ NeurologyException::NeurologyException
    this->explanation = message;
 }
 
-NeurologyException::NeurologyException
-(NeurologyException &exception)
-{
-   this->explanation = exception.explanation;
-}
-
 Win32Exception::Win32Exception
 (const LPWSTR message)
    : NeurologyException(message)
@@ -28,13 +22,6 @@ Win32Exception::Win32Exception
    this->error = error;
 }
 
-Win32Exception::Win32Exception
-(Win32Exception &exception)
-   : NeurologyException(exception)
-{
-   this->error = exception.error;
-}
-
 NullPointerException::NullPointerException
 (void)
    : NeurologyException(EXCSTR(L"A pointer was null when it shouldn't have been."))
@@ -44,11 +31,5 @@ NullPointerException::NullPointerException
 NullPointerException::NullPointerException
 (const LPWSTR message)
    : NeurologyException(message)
-{
-}
-
-NullPointerException::NullPointerException
-(NullPointerException &exception)
-   : NeurologyException(exception)
 {
 }
