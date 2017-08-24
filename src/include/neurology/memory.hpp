@@ -202,8 +202,10 @@ namespace Neurology
       Memory(LPVOID pointer, SIZE_T size, Mode mode);
       Memory(Memory *parent, SIZE_T offset, SIZE_T size, Mode mode);
       Memory(Memory &memory);
+      Memory(const Memory &memory);
 
       void operator=(Memory &memory);
+      void operator=(const Memory &memory);
 
       Memory *getParent(void);
       const Memory *getParent(void) const;
@@ -230,8 +232,10 @@ namespace Neurology
       void unmarkExecutable(void);
 
       SIZE_T size(void) const;
-      virtual Address address(void);
-      virtual const Address address(void) const;
+      Address address(void);
+      const Address address(void) const;
+      Address address(LPVOID pointer);
+      const Address address(LPVOID pointer) const;
       virtual Address address(SIZE_T offset);
       virtual const Address address(SIZE_T offset) const;
       LPVOID pointer(void) const;
@@ -268,13 +272,20 @@ namespace Neurology
    class Address
    {
    protected:
-      Memory *memory;
+      union
+      {
+         Memory memory;
+         const Memory constMemory;
+      };
+      
       SIZE_T offset;
 
    public:
       Address(void);
-      Address(Memory *memory);
-      Address(Memory *memory, SIZE_T offset);
+      Address(Memory memory);
+      Address(const Memory memory);
+      Address(Memory memory, SIZE_T offset);
+      Address(const Memory memory, SIZE_T offset);
       Address(Address &address);
       Address(const Address &address);
       ~Address(void);

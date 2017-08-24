@@ -627,6 +627,16 @@ Memory::isNull
 }
 
 bool
+Memory::isNullAddress
+(void) const
+{
+   if (this->parent != NULL)
+      return this->parent->isNullAddress();
+   
+   return this->reference.isNullAddress();
+}
+
+bool
 Memory::isValid
 (void) const
 {
@@ -635,9 +645,9 @@ Memory::isValid
    if (this->parent != NULL)
       result &= this->parent->isValid() && this->parent->inRange(this->parent->offset() + this->offset());
    else if (result)
-      result &= this->reference.pointer() != NULL;
+      result &= this->isNullAddress();
 
-   return result && this->size() != 0;
+   return result;
 }
 
 void
@@ -743,42 +753,20 @@ Address
 Memory::address
 (SIZE_T offset)
 {
-   Memory *addressParent = this;
-
-   while (addressParent != NULL && !addressParent->inRange(addressParent->pointer(offset)))
-   {
-      offset += addressParent->offset();
-      addressParent = &addressParent->getParent();
-
-      if (addressParent->isNull())
-         addressParent = NULL;
-   }
-
-   if (addressParent == NULL)
+   if (!this->inRange(offset))
       throw OffsetOutOfBoundsException(*this, offset, 0);
    
-   return Address(addressParent, offset);
+   return Address(*this, offset);
 }
 
 const Address
 Memory::address
 (SIZE_T offset) const
 {
-   Memory *addressParent = this;
-
-   while (addressParent != NULL && !addressParent->inRange(addressParent->pointer(offset)))
-   {
-      offset += addressParent->offset();
-      addressParent = &addressParent->getParent();
-
-      if (addressParent->isNull())
-         addressParent = NULL;
-   }
-
-   if (addressParent == NULL)
+   if (!this->inRange(offset))
       throw OffsetOutOfBoundsException(*this, offset, 0);
    
-   return Address(addressParent, offset);
+   return Address(*this, offset);
 }
 
 LPVOID
