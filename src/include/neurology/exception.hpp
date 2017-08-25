@@ -2,25 +2,23 @@
 
 #include <windows.h>
 
-namespace Neurology
-{
-
 #ifdef _DEBUG
 #define EXCSTR(str) (str)
 #else
 #define EXCSTR(str) (NULL)
 #endif
-   
-   class NeurologyException
+
+namespace Neurology
+{
+   class Exception
    {
    public:
-      LPWSTR explanation;
-      
-   public:
-      NeurologyException(const LPWSTR message);
+      const LPWSTR explanation;
+
+      Exception(const LPWSTR message);
    };
 
-   class Win32Exception : public NeurologyException
+   class Win32Exception : public Exception
    {
    public:
       DWORD error;
@@ -29,7 +27,7 @@ namespace Neurology
       Win32Exception(DWORD error, const LPWSTR message);
    };
 
-   class NullPointerException : public NeurologyException
+   class NullPointerException : public Exception
    {
    public:
       NullPointerException(void);
