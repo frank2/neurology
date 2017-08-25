@@ -44,19 +44,22 @@ DepthException::DepthException
 Outlet::Outlet
 (void)
 {
-   this->refCount = NULL;
-   this->shallow = true;
+   this->solder();
+   this->sockets = 0;
+   this->shallow = false;
 }
 
 Outlet::Outlet
 (Outlet &outlet)
 {
+   this->solder();
    *this = outlet;
 }
 
 Outlet::Outlet
 (const Outlet &outlet)
 {
+   this->solder();
    *this = outlet;
 }
 
@@ -76,55 +79,59 @@ void
 Outlet::operator=
 (Outlet &outlet)
 {
-   if (this->refCount != NULL)
-      this->deref();
-   
-   this->refCount = outlet.refCount;
+   if (this->isActive())
+      this->unplug();
 
-   if (this->refCount != NULL)
-      this->ref();
+   if (this->circuitCount() != outlet.circuitCount())
+      throw CircuitMappingException(*this, outlet);
 
-   this->constOutlet = false;
+   this->route(outlet);
+
+   if (outlet.sockets != 
+      this->plug();
+
+   this->shallow = false;
 }
 
 void
 Outlet::operator=
 (const Outlet &outlet)
 {
-   if (!this->isNull() && !this->constOutlet && this->refs() > 1)
+   if (this->isActive()
+   if (!this->isNull() && !this->constOutlet && this->plugs() > 1)
       throw SlaughteredOutletException(*this, outlet);
    else if (!outlet.isNull() && this->isNull())
       this->allocate();
 
    if (!outlet.isNull())
-      *this->refCount = *outlet.refCount;
+      *this->plugCount = *outlet.plugCount;
    else if (!this->isNull())
-      *this->refCount = 0;
+      *this->plugCount = 0;
    
    this->constOutlet = true;
 }
 
 DWORD
-Outlet::refs
+Outlet::plugs
 (void) const
 {
-   if (this->refCount == NULL)
+   if (this->plugCount == NULL)
       return 0;
 
-   return *this->refCount;
+   return *this->plugCount;
 }
 
 void
-Outlet::ref
+Outlet::plug
 (void)
 {
    this->throwIfConst();
    this->throwIfNull();
-   ++*this->refCount;
+   ++*this->plugCount;
 }
 
 void
-Outlet::deref
+Outlet::unplug
 (void)
 {
    this->throwIfConst();
@@ -134,9 +141,9 @@ Outlet::deref
       this->release();
    else
    {
-      --*this->refCount;
+      --*this->plugCount;
 
-      if (*this->refCount <= 0)
+      if (*this->plugCount <= 0)
          this->release();
    }
 }
@@ -145,7 +152,7 @@ bool
 Outlet::isNull
 (void) const
 {
-   return this->refCount == NULL;
+   return this->plugCount == NULL;
 }
 
 bool
@@ -175,11 +182,11 @@ void
 Outlet::allocate
 (void)
 {
-   if (this->refCount != NULL)
+   if (this->plugCount != NULL)
       throw DoubleAllocationException(*this);
    
-   this->refCount = new DWORD;
-   *this->refCount = 1;
+   this->plugCount = new DWORD;
+   *this->plugCount = 1;
 }
 
 void
@@ -187,6 +194,6 @@ Outlet::release
 (void)
 {
    this->throwIfNull();
-   *this->refCount = 0;
-   delete this->refCount;
+   *this->plugCount = 0;
+   delete this->plugCount;
 }

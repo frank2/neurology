@@ -146,12 +146,12 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\src\include\neurology.hpp" />
+    <ClInclude Include="..\..\src\include\neurology\circuitry.hpp" />
     <ClInclude Include="..\..\src\include\neurology\configuration.hpp" />
     <ClInclude Include="..\..\src\include\neurology\exception.hpp" />
     <ClInclude Include="..\..\src\include\neurology\handle.hpp" />
     <ClInclude Include="..\..\src\include\neurology\heap.hpp" />
     <ClInclude Include="..\..\src\include\neurology\memory.hpp" />
-    <ClInclude Include="..\..\src\include\neurology\outlet.hpp" />
     <ClInclude Include="..\..\src\include\neurology\pe.hpp" />
     <ClInclude Include="..\..\src\include\neurology\pe\dos.hpp" />
     <ClInclude Include="..\..\src\include\neurology\pe\file.hpp" />
@@ -163,12 +163,12 @@
     <ClInclude Include="..\..\src\include\neurology\security.hpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\src\lib\circuitry.cpp" />
     <ClCompile Include="..\..\src\lib\configuration.cpp" />
     <ClCompile Include="..\..\src\lib\exception.cpp" />
     <ClCompile Include="..\..\src\lib\handle.cpp" />
     <ClCompile Include="..\..\src\lib\heap.cpp" />
     <ClCompile Include="..\..\src\lib\memory.cpp" />
-    <ClCompile Include="..\..\src\lib\outlet.cpp" />
     <ClCompile Include="..\..\src\lib\pe\dos.cpp" />
     <ClCompile Include="..\..\src\lib\pe\file.cpp" />
     <ClCompile Include="..\..\src\lib\pe\image.cpp" />
