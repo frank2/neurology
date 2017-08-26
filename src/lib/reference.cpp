@@ -1,199 +1,251 @@
-#include <neurology/outlet.hpp>
+#include <neurology/reference.hpp>
 
 using namespace Neurology;
 
-OutletException::OutletException
-(const Outlet &outlet, const LPWSTR message)
-   : outlet(outlet)
-   , NeurologyException(message)
+VoidReference::Exception::Exception
+(const VoidReference &reference, const LPWSTR message)
+   : Neurology::Exception(message)
+   , reference(reference)
 {
 }
 
-OutletException::OutletException
-(OutletException &exception)
-   : outlet(exception.outlet)
-   , NeurologyException(exception)
+VoidReference::VoidReferenceStateException::VoidReferenceStateException
+(const VoidReference &reference, const LPWSTR message)
+   : VoidReference::Exception(reference, message)
 {
 }
 
-NullSocketException::NullSocketException
-(const Outlet &outlet)
-   : OutletException(outlet, EXCSTR(L"The socket counter is null."))
+VoidReference::OpenVoidReferenceException::OpenVoidReferenceException
+(const VoidReference &reference)
+   : VoidReference::VoidReferenceStateException(reference, EXCSTR(L"The reference is currently open."))
 {
 }
 
-DoubleAllocationException::DoubleAllocationException
-(const Outlet &outlet)
-   : OutletException(outlet, EXCSTR(L"The outlet was already allocated."))
+VoidReference::ClosedVoidReferenceException::ClosedVoidReferenceException
+(const VoidReference &reference)
+   : VoidReference::VoidReferenceStateException(reference, EXCSTR(L"The reference is currently closed."))
 {
 }
 
-ActiveOutletException::ActiveOutletException
-(const Outlet &outlet, const Outlet &inactive)
-   : OutletException(outlet, EXCSTR(L"A shallow Outlet is attempting to overwrite an active Outlet."))
-   , inactive(inactive)
+VoidReference::ShallowVoidReferenceException::ShallowVoidReferenceException
+(const VoidReference &reference)
+   : VoidReference::Exception(reference, EXCSTR(L"The reference is shallow."))
 {
 }
 
-DepthException::DepthException
-(const Outlet &outlet)
-   : OutletException(outlet, EXCSTR(L"Non-const function called on shallow Outlet."))
+VoidReference::SizeMismatchException::SizeMismatchException
+(const VoidReference &reference, SIZE_T size)
+   : VoidReference::Exception(reference, EXCSTR(L"Supplied size does not match reference size."))
+   , size(size)
 {
 }
 
-Outlet::Outlet
+VoidReference::VoidReference
+(void)
+   : data(NULL)
+   , size(0)
+   , shallow(false)
+{
+}
+
+VoidReference::VoidReference
+(VoidReference &reference)
+{
+   *this = reference;
+}
+
+VoidReference::VoidReference
+(const VoidReference &reference)
+{
+   *this = reference;
+}
+
+VoidReference::~VoidReference
 (void)
 {
-   this->solder();
-   this->sockets = 0;
-   this->shallow = false;
+   if (this->shallow)
+      this->deallocate();
 }
 
-Outlet::Outlet
-(Outlet &outlet)
+LPVOID
+VoidReference::Allocate
+(SIZE_T size)
 {
-   this->solder();
-   *this = outlet;
-}
+   BYTE *allocation = new BYTE[size];
 
-Outlet::Outlet
-(const Outlet &outlet)
-{
-   this->solder();
-   *this = outlet;
-}
-
-Outlet::~Outlet
-(void)
-{
-   if (!this->isNull())
-   {
-      if (this->shallow)
-         this->release();
-      else
-         this->unplug();
-   }
-}
-
-void
-Outlet::operator=
-(Outlet &outlet)
-{
-   if (this->isActive())
-      this->unplug();
-
-   if (this->circuitCount() != outlet.circuitCount())
-      throw CircuitMappingException(*this, outlet);
-
-   this->route(outlet);
-
-   if (outlet.sockets != 
-      this->plug();
-
-   this->shallow = false;
-}
-
-void
-Outlet::operator=
-(const Outlet &outlet)
-{
-   if (this->isActive()
-   if (!this->isNull() && !this->constOutlet && this->plugs() > 1)
-      throw SlaughteredOutletException(*this, outlet);
-   else if (!outlet.isNull() && this->isNull())
-      this->allocate();
-
-   if (!outlet.isNull())
-      *this->plugCount = *outlet.plugCount;
-   else if (!this->isNull())
-      *this->plugCount = 0;
+   ZeroMemory(allocation, size);
    
-   this->constOutlet = true;
-}
-
-DWORD
-Outlet::plugs
-(void) const
-{
-   if (this->plugCount == NULL)
-      return 0;
-
-   return *this->plugCount;
+   return reinterpret_cast<LPVOID>(allocation);
 }
 
 void
-Outlet::plug
-(void)
+VoidReference::Deallocate
+(LPVOID data)
 {
-   this->throwIfConst();
-   this->throwIfNull();
-   ++*this->plugCount;
+   delete[] data;
 }
 
 void
-Outlet::unplug
-(void)
+VoidReference::operator=
+(VoidReference &reference)
 {
-   this->throwIfConst();
-   this->throwIfNull();
-
-   if (this->constOutlet)
-      this->release();
+   if (reference.isShallow())
+      *this = const_cast<VoidReference &>(reference);
    else
    {
-      --*this->plugCount;
-
-      if (*this->plugCount <= 0)
-         this->release();
+      this->data = reference.data;
+      this->size = reference.size;
+      this->shallow = false;
    }
 }
 
-bool
-Outlet::isNull
-(void) const
+void
+VoidReference::operator=
+(const VoidReference &reference)
 {
-   return this->plugCount == NULL;
-}
+   reference.throwIfNoData();
 
-bool
-Outlet::isConst
-(void) const
-{
-   return this->constOutlet;
+   if (!this->hasData)
+      this->allocate(size);
+   else if (this->size != reference.size)
+      this->resize(reference.size);
+         
+   this->assign(*reference.data, reference.size);
+   this->shallow = true;
 }
 
 void
-Outlet::throwIfNull
-(void) const
+VoidReference::assign
+(const LPVOID pointer, SIZE_T size)
 {
-   if (this->isNull())
-      throw NullOutletException(*this);
-}
-
-void
-Outlet::throwIfConst
-(void) const
-{
-   if (this->constOutlet)
-      throw ConstMismatchException(*this);
-}
-
-void
-Outlet::allocate
-(void)
-{
-   if (this->plugCount != NULL)
-      throw DoubleAllocationException(*this);
+   if (!this->hasData())
+      this->allocate(size);
+   else if (this->size != size)
+      throw VoidReference::SizeMismatchException(*this, size);
    
-   this->plugCount = new DWORD;
-   *this->plugCount = 1;
+   CopyMemory(*this->data, pointer, size);
 }
 
 void
-Outlet::release
+VoidReference::reassign
+(const LPVOID pointer, SIZE_T size)
+{
+   this->throwIfShallow();
+   
+   if (this->hasData() && this->size != size)
+      this->resize(size);
+
+   this->assign(pointer, size);
+}
+
+LPVOID
+VoidReference::deref
 (void)
 {
-   this->throwIfNull();
-   *this->plugCount = 0;
-   delete this->plugCount;
+   this->throwIfNoData();
+
+   return *this->data;
+}
+
+const LPVOID
+VoidReference::deref
+(void) const
+{
+   this->throwIfNoData();
+
+   return const_cast<LPVOID>(*this->data);
+}
+
+SIZE_T
+VoidReference::getSize
+(void) const
+{
+   return this->size;
+}
+
+bool
+VoidReference::hasData
+(void) const
+{
+   return this->data != NULL && *this->data != NULL && this->size != 0;
+}
+
+bool
+VoidReference::isShallow
+(void) const
+{
+   return this->shallow;
+}
+
+void
+VoidReference::throwIfShallow
+(void) const
+{
+   if (this->isShallow())
+      throw VoidReference::ShallowVoidReferenceException(*this);
+}
+
+void
+VoidReference::throwIfHasData
+(void) const
+{
+   if (this->hasData())
+      throw VoidReference::OpenVoidReferenceException(*this);
+}
+
+void
+VoidReference::throwIfNoData
+(void) const
+{
+   if (!this->hasData())
+      throw VoidReference::ClosedVoidReferenceException(*this);
+}
+
+void
+VoidReference::allocate
+(SIZE_T size)
+{
+   this->throwIfHasData();
+
+   this->size = size;
+
+   if (this->data == NULL)
+      this->data = new LPVOID;
+         
+   *this->data = VoidReference::Allocate(this->size);
+}
+      
+void
+VoidReference::deallocate
+(void)
+{
+   this->throwIfNoData();
+
+   VoidReference::Deallocate(*this->data);
+   *this->data = NULL;
+
+   delete this->data;
+   this->data = NULL;
+}
+
+void
+VoidReference::resize
+(SIZE_T size)
+{
+   LPVOID newData;
+         
+   this->throwIfShallow();
+   this->throwIfNoData();
+
+   if (size != 0)
+   {
+      newData = VoidReference::Allocate(size);
+      CopyMemory(newData, *this->data, min(size, this->size));
+   }
+   else
+      newData = NULL;
+
+   VoidReference::Deallocate(*this->data);
+   *this->data = newData;
+   this->size = size;
 }

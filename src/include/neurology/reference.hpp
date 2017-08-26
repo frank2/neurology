@@ -2,329 +2,464 @@
 
 #include <windows.h>
 
+#include <type_traits>
 #include <vector>
 
 #include <neurology/exception.hpp>
 
 namespace Neurology
 {
-   class Frame
+   typedef std::vector<BYTE> Data;
+#define VarData(var) Data((LPBYTE)(&(var)), (LPBYTE)((&(var))+1))
+#define PointerData(ptr) Data((LPBYTE)(ptr), (LPBYTE)((ptr)+1))
+#define BlockData(ptr, size) Data((LPBYTE)(ptr), ((LPBYTE)(ptr))+size)
+
+   class VoidReference
    {
    public:
       class Exception : public Neurology::Exception
       {
       public:
-         const Frame &frame;
+         const VoidReference &voidReference;
 
-         Exception(const Frame &frame, const LPWSTR message);
+         Exception(const VoidReference &reference, const LPWSTR message);
       };
 
-      class ChargeException : public Frame::Exception
+      class ReferenceStateException : public VoidReference::Exception
       {
       public:
-         ChargeException(const Frame &frame, const LPWSTR message);
+         ReferenceStateException(const VoidReference &reference, const LPWSTR message);
       };
 
-      class AlreadyChargedException : public ChargeException
+      class DeadReferenceException : public ReferenceStateException
       {
       public:
-         AlreadyChargedException(const Frame &frame);
-      };
-
-      class NoChargeException : public ChargeException
-      {
-      public:
-         NoChargeException(const Frame &frame);
-      };
-
-      class ShallowFrameException : public Frame::Exception
-      {
-      public:
-         ShallowFrameException(const Frame &frame);
-      };
-
-      class SizeMismatchException : public Frame::Exception
-      {
-      public:
-         const SIZE_T volts;
+         OpenReferenceException(const VoidReference &reference);
+      }
          
-         SizeMismatchException(const Frame &frame, SIZE_T volts);
-      };
-
-      class UnknownSizeException : public Frame::Exception
+      class ActiveReferenceException : public ReferenceStateException
       {
       public:
-         const LPVOID address;
+         ActiveReferenceException(const VoidReference &reference);
+      };
 
-         UnknownSizeException(const Frame &frame, LPVOID address);
+      class ShallowReferenceException : public VoidReference::Exception
+      {
+      public:
+         ShallowReferenceException(const VoidReference &reference);
+      };
+
+      class SizeMismatchException : public VoidReference::Exception
+      {
+      public:
+         const SIZE_T size;
+         
+         SizeMismatchException(const VoidReference &reference, SIZE_T size);
       };
       
    protected:
       LPVOID *data;
-      SIZE_T size;
+      SIZE_T *size;
+      SIZE_T *referrals;
 
    private:
       bool shallow;
 
    public:
-      Frame(void);
-      {
-         this->data = NULL;
-         this->size = 0;
-         this->shallow = false;
-      }
-      
-      Frame(Frame &frame);
-      {
-         *this = frame;
-      }
-      
-      Frame(const Frame &frame)
-      {
-         *this = frame;
-      }
-
-      ~Frame(void);
-      {
-         if (this->shallow)
-            this->discharge();
-      }
+      VoidReference(void);
+      VoidReference(VoidReference &reference);
+      VoidReference(const VoidReference &reference);
+      ~VoidReference(void);
 
       static LPVOID Allocate(SIZE_T size);
-      {
-         return reinterpret_cast<LPVOID>(new BYTE[size]);
-      }
-      
       static void Deallocate(LPVOID data);
-      {
-         delete[] data;
-      }
 
-      void operator=(Frame &frame);
-      {
-         this->data = frame.data;
-         this->size = frame.size;
-         this->shallow = false;
-      }
+      void operator=(VoidReference &reference);
+      void operator=(const VoidReference &reference);
 
-      void operator=(const Frame &frame);
-      {
-         this->throwIfShallow();
-         frame.throwIfNoData();
+      void assign(const LPVOID pointer, SIZE_T size);
+      void reassign(const LPVOID pointer, SIZE_T size);
+      LPVOID deref(void);
+      const LPVOID deref(void) const;
 
-         if (!this->hasData)
-            this->charge(size);
-         else if (this->size != frame.size)
-            this->adjustSize(frame.size);
-         
-         this->assign(*frame.data, frame.size);
-         this->shallow = true;
-      }
-
-      void assign(LPVOID pointer, SIZE_T size);
-      {
-         if (!this->hasData())
-            this->charge(size);
-         else if (this->size != size)
-            throw SizeMismatchException(*this, size);
-
-         CopyMemory(*this->data, pointer, size);
-      }
-
-      void reassign(LPVOID pointer, SIZE_T size);
-      {
-         this->throwIfShallow();
-         
-         if (this->hasData() && this->size != size)
-            this->adjustSize(size);
-
-         this->assign(pointer, size);
-      }
-
-      SIZE_T voltage(void) const;
-      {
-         return this->size;
-      }
-
+      SIZE_T getSize(void) const;
+      
       bool hasData(void) const;
-      {
-         return this->data != NULL && *this->data != NULL && this->size > 0;
-      }
-      
       bool isShallow(void) const;
-      {
-         return this->shallow;
-      }
-
+      
       void throwIfShallow(void) const;
-      {
-         if (this->shallow)
-            throw ShallowFrameException(*this);
-      }
-
       void throwIfHasData(void) const;
-      {
-         if (this->hasData())
-            throw ChargedFrameException(*this);
-      }
-
       void throwIfNoData(void) const;
-      {
-         if (!this->hasData())
-            throw DischargedFrameException(*this);
-      }
+
+      virtual Data read(void) const;
+      virtual Data read(SIZE_T size) const;
+      virtual Data read(SIZE_T offset, SIZE_T size) const;
+      virtual void write(const Data &data);
+      virtual void write(SIZE_T offset, const Data &data);
       
-      void charge(SIZE_T size);
-      {
-         this->throwIfHasData();
-
-         this->size = size;
-
-         if (this->data == NULL)
-            this->data = new LPVOID;
-         
-         *this->data = Frame::Allocate(this->size);
-      }
-      
-      void discharge(void);
-      {
-         this->throwIfNoData();
-
-         Frame::Deallocate(*this->data);
-         *this->data = NULL;
-
-         delete this->data;
-         this->data = NULL;
-      }
-      
-      void adjustSize(SIZE_T size);
-      {
-         LPVOID newData;
-         
-         this->throwIfShallow();
-         this->throwIfNoData();
-
-         if (min(size, this->size) != 0)
-         {
-            newData = Frame::Allocate(size);
-            CopyMemory(newData, *this->data, min(size, this->size));
-         }
-         else
-            newData = NULL
-
-         Frame::Deallocate(*this->data);
-         this->data = newData;
-         this->size = size;
-      }
+      virtual void allocate(SIZE_T size);
+      virtual void deallocate(void);
+      virtual void resize(SIZE_T size);
    };
 
-   template <class Type>
-   class TypedFrame : public Frame
+   template <class Type, SIZE_T PointerHint=0>
+   class Reference : public VoidReference
    {
-      TypedFrame(Type value)
-         : Frame()
+   public:
+      class Exception : public VoidReference::Exception
+      {
+      public:
+         const Reference<Type, PointerHint> &reference;
+
+         Exception(const Reference<Type, PointerHint> &reference, const LPWSTR message)
+            : VoidReference::Exception(reference, message)
+         {
+         }
+      };
+
+      class BadPointerHintException : public Exception
+      {
+      public:
+         BadPointerHintException(const Reference<Type, PointerHint> &reference)
+            : Exception(reference, EXCSTR(L"Size hint only relevant for pointer-based constructors."))
+         {
+         }
+      };
+
+      Reference(void)
+         : VoidReference()
+      {
+         if (PointerHint == 0)
+            this->allocate(sizeof(Type));
+         else
+            this->allocate(PointerHint);
+      }
+      
+      Reference(const Type &value)
+         : VoidReference()
+      {
+         if (PointerHint != 0)
+            throw BadPointerHintException(*this);
+
+         this->assign(value);
+      }
+
+      Reference(const Type *type)
+         : VoidReference()
+      {
+         if (PointerHint == 0)
+            this->assign(type, sizeof(Type));
+         else
+            this->assign(type, PointerHint);
+      }
+
+      virtual void operator=(const Type &value)
       {
          this->assign(value);
       }
 
-      TypedFrame(Type *type)
-         : Frame()
+      virtual void operator=(const Type *type)
       {
          this->assign(type);
       }
 
-      TypedFrame(Type *type, SIZE_T size)
-         : Frame()
-      {
-         this->assign(type, size);
-      }
-
-      void operator=(Type value)
-      {
-         this->assign(value);
-      }
-
-      void operator=(Type *type)
-      {
-         this->assign(type);
-      }
-
-      Type operator*(void)
+      virtual Type operator*(void)
       {
          return this->resolve();
       }
 
-      void assign(Type value)
+      virtual const Type operator*(void) const
       {
-         this->assign((LPVOID)&value, sizeof(Type));
+         return this->resolve();
       }
 
-      void assign(Type *pointer)
+      virtual Type operator+(const Type &right)
       {
-         this->assign((LPVOID)type, sizeof(Type));
+         return **this + right;
       }
 
-      void reassign(Type value)
+      virtual const Type operator+(const Type &right) const
       {
-         this->reassign((LPVOID)&value, sizeof(Type));
+         return **this + right;
       }
 
-      void reassign(Type *pointer)
+      virtual Type operator-(const Type &right)
       {
-         this->reassign((LPVOID)pointer, sizeof(Type));
+         return **this - right;
       }
 
-      Type *cast(void) const
+      virtual const Type operator-(const Type &right) const
+      {
+         return **this - right;
+      }
+
+      virtual Type operator*(const Type &right)
+      {
+         return **this * right;
+      }
+
+      virtual const Type operator*(const Type &right) const
+      {
+         return **this * right;
+      }
+
+      virtual Type operator/(const Type &right)
+      {
+         return **this / right;
+      }
+
+      virtual const Type operator/(const Type &right) const
+      {
+         return **this / right;
+      }
+
+      virtual Type operator%(const Type &right)
+      {
+         return **this % right;
+      }
+
+      virtual const Type operator%(const Type &right) const
+      {
+         return **this % right;
+      }
+
+      virtual Type &operator++(void)
+      {
+         **this = **this + 1;
+         return **this;
+      }
+
+      virtual Type operator++(int dummy)
+      {
+         **this = **this + 1;
+         return **this;
+      }
+
+      virtual Type &operator--(void)
+      {
+         **this = **this - 1;
+         return **this;
+      }
+
+      virtual Type operator--(int dummy)
+      {
+         **this = **this - 1;
+         return **this;
+      }
+
+      virtual bool operator==(const Type right) const
+      {
+         return **this == right;
+      }
+
+      virtual bool operator!=(const Type right) const
+      {
+         return **this != right;
+      }
+
+      virtual bool operator>(const Type right) const
+      {
+         return **this > right;
+      }
+
+      virtual bool operator<(const Type right) const
+      {
+         return **this < right;
+      }
+
+      virtual bool operator>=(const Type right) const
+      {
+         return **this >= right;
+      }
+
+      virtual bool operator<=(const Type right) const
+      {
+         return **this <= right;
+      }
+
+      virtual bool operator!(void) const
+      {
+         return !**this;
+      }
+
+      virtual bool operator&&(const Type right) const
+      {
+         return **this && right;
+      }
+
+      virtual bool operator||(const Type right) const
+      {
+         return **this || right;
+      }
+
+      virtual Type operator~(void) const
+      {
+         return ~**this;
+      }
+
+      virtual Type operator&(const Type right) const
+      {
+         return **this & right;
+      }
+
+      virtual Type operator|(const Type right) const
+      {
+         return **this | right;
+      }
+
+      virtual Type operator^(const Type right) const
+      {
+         return **this ^ right;
+      }
+
+      virtual Type operator<<(const Type right) const
+      {
+         return **this << right;
+      }
+
+      virtual Type operator>>(const Type right) const
+      {
+         return **this >> right;
+      }
+
+      virtual Type &operator+=(const Type right)
+      {
+         **this = **this + right;
+         return **this;
+      }
+
+      virtual Type &operator-=(const Type right)
+      {
+         **this = **this - right;
+         return **this;
+      }
+
+      virtual Type &operator*=(const Type right)
+      {
+         **this = **this * right;
+         return **this;
+      }
+
+      virtual Type &operator/=(const Type right)
+      {
+         **this = **this / right;
+         return **this;
+      }
+
+      virtual Type &operator%=(const Type right)
+      {
+         **this = **this % right;
+         return **this;
+      }
+
+      virtual Type &operator&=(const Type right)
+      {
+         **this = **this & right;
+         return **this;
+      }
+
+      virtual Type &operator|=(const Type right)
+      {
+         **this = **this | right;
+         return **this;
+      }
+
+      virtual Type &operator^=(const Type right)
+      {
+         **this = **this ^ right;
+         return **this;
+      }
+
+      virtual Type &operator<<=(const Type right)
+      {
+         **this = **this << right;
+         return **this;
+      }
+
+      virtual Type &operator>>=(const Type right)
+      {
+         **this = **this >> right;
+         return **this;
+      }
+
+      virtual Type &operator[](const int index)
+      {
+         return **this[index];
+      }
+
+      virtual const Type &operator[](const int index) const
+      {
+         return **this[index];
+      }
+
+      virtual Type *operator->(void)
+      {
+         return this->pointer();
+      }
+
+      virtual const Type *operator->(void) const
+      {
+         return this->pointer();
+      }
+      
+      void assign(const Type &value)
+      {
+         this->assign(const_cast<LPVOID>(&value), sizeof(Type));
+      }
+
+      void assign(const Type *pointer)
+      {
+         if (!this->hasData())
+         {
+            if (PointerHint == 0)
+               this->assign(const_cast<LPVOID>(pointer), sizeof(Type));
+            else
+               this->assign(const_cast<LPVOID>(pointer), PointerHint);
+         }
+         else
+            this->assign(const_cast<LPVOID>(pointer), this->size);
+      }
+
+      void reassign(const Type &value)
+      {
+         this->reassign(const_cast<LPVOID>(&value), sizeof(Type));
+      }
+
+      void reassign(const Type *pointer)
+      {
+         if (!this->hasData())
+         {
+            if (PointerHint == 0)
+               this->reassign(const_cast<LPVOID>(pointer), sizeof(Type));
+            else
+               this->reassign(const_cast<LPVOID>(pointer), PointerHint);
+         }
+         else
+            this->reassign(const_cast<LPVOID>(pointer), this->size);
+      }
+
+      Type *pointer(void)
       {
          this->throwIfNoData();
          
-         return reinterpret_cast<Type *>(*this->data);
+         return static_cast<Type *>(this->deref());
       }
 
-      Type resolve(void) const
+      const Type *pointer(void) const
       {
-         return *this->cast();
+         this->throwIfNoData();
+
+         return const_cast<Type *>(this->deref());
       }
-   };
 
-   class Reference
-   {
-   public:
-      class Exception : public Neurology::Exception
+      Type resolve(void)
       {
-      public:
-         const Reference &reference;
+         return *this->pointer();
+      }
 
-         Exception(const Reference &reference, const LPWSTR message);
-      };
-      
-   protected:
-      TypedFrame<SIZE_T> referrals;
-
-   private:
-      bool shallow;
-      
-   public:
-      Reference(void);
-      Reference(Reference &master);
-      Reference(const Reference &master);
-      ~Reference(void);
-
-      virtual void operator=(Reference &master);
-      virtual void operator=(const Reference &master);
-
-      SIZE_T getReferrals(void) const;
-      virtual void reference(void);
-      virtual void dereference(void);
-      bool isDead(void) const;
-      bool isWaiting(void) const;
-      bool isActive(void) const;
-      bool isShallow(void) const;
-      void throwIfActive(void) const;
-      void throwIfShallow(void) const;
-
-   protected:
-      virtual void solder(void);
-      virtual void shutdown(void);
+      const Type resolve(void) const
+      {
+         return *this->pointer();
+      }
    };
 }

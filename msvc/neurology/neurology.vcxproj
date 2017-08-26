@@ -160,6 +160,7 @@
     <ClInclude Include="..\..\src\include\neurology\pe\optional.hpp" />
     <ClInclude Include="..\..\src\include\neurology\pe\section.hpp" />
     <ClInclude Include="..\..\src\include\neurology\process.hpp" />
+    <ClInclude Include="..\..\src\include\neurology\reference.hpp" />
     <ClInclude Include="..\..\src\include\neurology\security.hpp" />
   </ItemGroup>
   <ItemGroup>
@@ -176,6 +177,7 @@
     <ClCompile Include="..\..\src\lib\pe\optional.cpp" />
     <ClCompile Include="..\..\src\lib\pe\section.cpp" />
     <ClCompile Include="..\..\src\lib\process.cpp" />
+    <ClCompile Include="..\..\src\lib\reference.cpp" />
     <ClCompile Include="..\..\src\lib\security.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
