@@ -6,6 +6,7 @@
 #include <vector>
 
 #include <neurology/exception.hpp>
+#include <neurology/allocators/allocator.hpp>
 
 namespace Neurology
 {
