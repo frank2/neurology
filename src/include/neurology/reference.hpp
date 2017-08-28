@@ -10,11 +10,6 @@
 
 namespace Neurology
 {
-   typedef std::vector<BYTE> Data;
-#define VarData(var) Data((LPBYTE)(&(var)), (LPBYTE)((&(var))+1))
-#define PointerData(ptr) Data((LPBYTE)(ptr), (LPBYTE)((ptr)+1))
-#define BlockData(ptr, size) Data((LPBYTE)(ptr), ((LPBYTE)(ptr))+size)
-
    class VoidReference
    {
    public:
