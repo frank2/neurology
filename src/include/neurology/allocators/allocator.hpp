@@ -79,15 +79,6 @@ namespace Neurology
          OffsetOutOfRangeException(const Allocation &allocation, const SIZE_T offset, const SIZE_T size);
       };
 
-      class BadPointerException : public Exception
-      {
-      public:
-         const LPVOID pointer;
-         const SIZE_T size;
-
-         BadPointerException(const Allocation &allocation, const LPVOID pointer, SIZE_T size);
-      };
-
    protected:
       Allocator *allocator;
       LPVOID pointer;
@@ -111,16 +102,22 @@ namespace Neurology
       bool isValid(void) const;
       bool isBound(void) const;
       bool isNull(void) const;
+      bool inRange(SIZE_T offset) const;
+      bool inRange(SIZE_T offset, SIZE_T size) const;
       bool inRange(const LPVOID address) const;
       bool inRange(const LPVOID address, SIZE_T size) const;
 
       void throwIfNoAllocator(void) const;
       void throwIfInvalid(void) const;
+      void throwIfNotInRange(SIZE_T offset) const;
+      void throwIfNotInRange(SIZE_T offset, SIZE_T size) const;
+      void throwIfNotInRange(const LPVOID address) const;
+      void throwIfNotInRange(const LPVOID address, SIZE_T size) const;
       
-      virtual LPVOID address(void);
-      virtual const LPVOID address(void) const;
-      virtual LPVOID address(SIZE_T offset);
-      virtual const LPVOID address(SIZE_T offset) const;
+      LPVOID address(void);
+      const LPVOID address(void) const;
+      LPVOID address(SIZE_T offset);
+      const LPVOID address(SIZE_T offset) const;
       LPVOID start(void);
       const LPVOID start(void) const;
       LPVOID end(void);
@@ -158,29 +155,49 @@ namespace Neurology
 
       SIZE_T getSize(void) const;
 
-      virtual void allocate(SIZE_T size);
-      virtual void reallocate(SIZE_T size);
-      virtual void deallocate(void);
+      void allocate(SIZE_T size);
+      void reallocate(SIZE_T size);
+      void deallocate(void);
+
+      template <class Type> void allocate(SIZE_T size)
+      {
+         if (size < sizeof(Type))
+            throw InsufficientSizeException(*this, size);
+
+         this->allocate(size);
+      }
 
       template <class Type> void allocate(void)
       {
-         this->allocate(sizeof(Type));
+         this->allocate<Type>(sizeof(Type));
+      }
+
+      template <class Type> void reallocate(SIZE_T size)
+      {
+         if (size < sizeof(Type))
+            throw InsufficientSizeException(*this, size);
+
+         this->reallocate(size);
       }
 
       template <class Type> void reallocate(void)
       {
-         this->reallocate(sizeof(Type));
+         this->reallocate<Type>(sizeof(Type));
       }
       
       Data read(void) const;
       Data read(SIZE_T size) const;
       Data read(SIZE_T offset, SIZE_T size) const;
-      virtual Data read(LPVOID address, SIZE_T size) const;
+      Data read(const LPVOID address, SIZE_T size) const;
       void write(const Data data);
       void write(SIZE_T offset, const Data data);
+      void write(LPVOID address, const Data data);
       void write(const LPVOID pointer, SIZE_T size);
       void write(SIZE_T offset, const LPVOID pointer, SIZE_T size);
-      virtual void write(LPVOID address, const LPVOID pointer, SIZE_T size);
+      void write(LPVOID address, const LPVOID pointer, SIZE_T size);
+
+      void copy(Allocation &allocation);
+      void clone(const Allocation &allocation);
    };
 
    class Allocator
@@ -244,6 +261,26 @@ namespace Neurology
          UnmanagedAllocationException(Allocator &allocator, Allocation &allocation);
       };
 
+      class BadPointerException : public Exception
+      {
+      public:
+         Allocation &allocation;
+         const LPVOID pointer;
+         const SIZE_T size;
+
+         BadPointerException(Allocator &allocator, Allocation &allocation, const LPVOID pointer, SIZE_T size);
+      };
+
+      class InsufficientSizeException : public Exception
+      {
+      public:
+         const SIZE_T size;
+         
+         InsufficientSizeException(const Allocator &allocation, const SIZE_T size);
+      };
+
+      static Allocator Instance;
+
    protected:
       std::map<LPVOID, SIZE_T> memoryPool;
       std::set<Allocation *> allocations;
@@ -252,6 +289,9 @@ namespace Neurology
    public:
       Allocator(void);
       ~Allocator(void);
+
+      static Allocation &Allocate(SIZE_T size);
+      static void Deallocate(Allocation &allocation);
       
       bool isPooled(const LPVOID pointer) const;
       bool isAllocated(const Allocation &allocation) const;
@@ -269,8 +309,30 @@ namespace Neurology
       virtual Allocation &find(const LPVOID address);
       virtual Allocation &null(void);
       virtual Allocation &allocate(SIZE_T size);
+      
+      template <class Type> Allocation &allocate(void)
+      {
+         return this->allocate<Type>(sizeof(Type));
+      }
+
+      template <class Type> Allocation &allocate(SIZE_T size)
+      {
+         if (size < sizeof(Type))
+            throw InsufficientSizeException(*this, size);
+
+         return this->allocate(size);
+      }
+      
       virtual void reallocate(Allocation &allocation, SIZE_T size);
+      template <class Type> void reallocate(Allocation &allocation)
+      {
+         this->reallocate(allocation, sizeof(Type));
+      }
+      
       virtual void deallocate(Allocation &allocation);
+
+      virtual Data read(const Allocation &allocation, const LPVOID address, SIZE_T size) const;
+      virtual void write(Allocation &allocation, LPVOID address, const LPVOID pointer, SIZE_T size);
       
    protected:
       void bind(Allocation *allocation, LPVOID address);
