@@ -16,29 +16,29 @@
     <Filter Include="Header Files\neurology">
       <UniqueIdentifier>{7f8c9819-6bd0-437e-a651-5daa4fec60eb}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Header Files\neurology\win32">
-      <UniqueIdentifier>{ee2aec87-80f2-4efb-bc2d-65db48a06fa3}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Header Files\neurology\allocators">
-      <UniqueIdentifier>{f05953af-29f7-42e5-84fd-a71d008951ec}</UniqueIdentifier>
+      <UniqueIdentifier>{4e0cd61b-2a3b-4c3d-8cb4-ac7c880937d0}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source Files\allocators">
-      <UniqueIdentifier>{e481d642-71f7-43e9-9489-4e0a3bcbe429}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source Files\win32">
-      <UniqueIdentifier>{60538695-e23c-4ee0-8ef5-a9b76f571ef3}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source Files\pe">
-      <UniqueIdentifier>{40bdc4f7-678d-4942-89db-4ade56e056a1}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source Files\pe\directories">
-      <UniqueIdentifier>{93044a30-80cf-44c2-8c71-92ce41bf92b3}</UniqueIdentifier>
+    <Filter Include="Header Files\neurology\win32">
+      <UniqueIdentifier>{5ae3a030-6261-4b0a-b0cf-37b250e0fb58}</UniqueIdentifier>
     </Filter>
     <Filter Include="Header Files\neurology\pe">
       <UniqueIdentifier>{b9112d9e-3470-49e8-b14a-1e1845adc978}</UniqueIdentifier>
     </Filter>
     <Filter Include="Header Files\neurology\pe\directories">
       <UniqueIdentifier>{85cd9b21-ec4c-433b-8be2-607404caeb44}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\allocators">
+      <UniqueIdentifier>{38ebb5b2-3197-423b-9a7a-3379dbbb9743}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\win32">
+      <UniqueIdentifier>{08b06c41-1e3c-4427-9dcc-eccba986f105}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\pe">
+      <UniqueIdentifier>{40bdc4f7-678d-4942-89db-4ade56e056a1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\pe\directories">
+      <UniqueIdentifier>{93044a30-80cf-44c2-8c71-92ce41bf92b3}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -52,9 +52,6 @@
       <Filter>Header Files\neurology</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\include\neurology\pe.hpp">
-      <Filter>Header Files\neurology</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\src\include\neurology\memory.hpp">
       <Filter>Header Files\neurology</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\include\neurology\pe\dos.hpp">
@@ -78,10 +75,13 @@
     <ClInclude Include="..\..\src\include\neurology\configuration.hpp">
       <Filter>Header Files\neurology</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\src\include\neurology\reference.hpp">
+    <ClInclude Include="..\..\src\include\neurology\heap.hpp">
+      <Filter>Header Files\neurology\allocators</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\include\neurology\memory.hpp">
       <Filter>Header Files\neurology</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\src\include\neurology\allocators\heap.hpp">
+    <ClInclude Include="..\..\src\include\neurology\allocators\allocator.hpp">
       <Filter>Header Files\neurology\allocators</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\include\neurology\win32\handle.hpp">
@@ -93,8 +93,11 @@
     <ClInclude Include="..\..\src\include\neurology\win32\security.hpp">
       <Filter>Header Files\neurology\win32</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\src\include\neurology\allocators\allocator.hpp">
-      <Filter>Header Files\neurology\allocators</Filter>
+    <ClInclude Include="..\..\src\include\neurology\allocators.hpp">
+      <Filter>Header Files\neurology</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\include\neurology\win32.hpp">
+      <Filter>Header Files\neurology</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -128,6 +131,9 @@
     <ClCompile Include="..\..\src\lib\reference.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\lib\allocators\allocator.cpp">
+      <Filter>Source Files\allocators</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\lib\allocators\heap.cpp">
       <Filter>Source Files\allocators</Filter>
     </ClCompile>
@@ -139,9 +145,6 @@
     </ClCompile>
     <ClCompile Include="..\..\src\lib\win32\security.cpp">
       <Filter>Source Files\win32</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\lib\allocators\allocator.cpp">
-      <Filter>Source Files\allocators</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

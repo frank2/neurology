@@ -4,15 +4,16 @@
 
 #include <map>
 #include <set>
+#include <vector>
 
 #include <neurology/exception.hpp>
 
 namespace Neurology
 {
    typedef std::vector<BYTE> Data;
-#define VarData(var) Data((LPBYTE)(&(var)), (LPBYTE)((&(var))+1))
-#define PointerData(ptr) Data((LPBYTE)(ptr), (LPBYTE)((ptr)+1))
-#define BlockData(ptr, size) Data((LPBYTE)(ptr), ((LPBYTE)(ptr))+size)
+#define VarData(var) Data(static_cast<LPBYTE>(&(var)), static_cast<LPBYTE>((&(var))+1))
+#define PointerData(ptr) Data(static_cast<LPBYTE>(ptr), static_cast<LPBYTE>((ptr)+1))
+#define BlockData(ptr, size) Data(static_cast<LPBYTE>(ptr), static_cast<LPBYTE>(ptr)+size)
 
    class Allocator;
    
@@ -107,10 +108,14 @@ namespace Neurology
       LPVOID operator*(void);
       const LPVOID operator*(void) const;
 
-      bool isBound(void) const;
       bool isValid(void) const;
-      bool inRange(LPVOID address) const;
-      bool inRange(LPVOID address, SIZE_T size) const;
+      bool isBound(void) const;
+      bool isNull(void) const;
+      bool inRange(const LPVOID address) const;
+      bool inRange(const LPVOID address, SIZE_T size) const;
+
+      void throwIfNoAllocator(void) const;
+      void throwIfInvalid(void) const;
       
       virtual LPVOID address(void);
       virtual const LPVOID address(void) const;
@@ -148,7 +153,7 @@ namespace Neurology
          else if (sizeof(Type)+offset > this->size)
             throw OffsetOutOfBoundsException(*this, offset, sizeof(Type));
 
-         return static_cast<Type *>(this->address(offset));
+         return const_cast<const Type *>(static_cast<Type *>(this->address(offset)));
       }
 
       SIZE_T getSize(void) const;
@@ -173,9 +178,9 @@ namespace Neurology
       virtual Data read(LPVOID address, SIZE_T size) const;
       void write(const Data data);
       void write(SIZE_T offset, const Data data);
-      void write(LPVOID pointer, SIZE_T size);
-      void write(SIZE_T offset, LPVOID pointer, SIZE_T size);
-      virtual void write(LPVOID address, LPVOID pointer, SIZE_T size);
+      void write(const LPVOID pointer, SIZE_T size);
+      void write(SIZE_T offset, const LPVOID pointer, SIZE_T size);
+      virtual void write(LPVOID address, const LPVOID pointer, SIZE_T size);
    };
 
    class Allocator
@@ -186,9 +191,57 @@ namespace Neurology
       class Exception : public Neurology::Exception
       {
       public:
-         const Allocator &allocator;
+         Allocator &allocator;
 
-         Exception(const Allocator &allocator, const LPWSTR message);
+         Exception(Allocator &allocator, const LPWSTR message);
+      };
+
+      class ZeroSizeException : public Exception
+      {
+      public:
+         ZeroSizeException(Allocator &allocator);
+      };
+
+      class PoolAllocationException : public Exception
+      {
+      public:
+         PoolAllocationException(Allocator &allocator);
+      };
+
+      class UnpooledAddressException : public Exception
+      {
+      public:
+         const LPVOID address;
+         
+         UnpooledAddressException(Allocator &allocator, const LPVOID address);
+      };
+
+      class BindingException : public Exception
+      {
+      public:
+         Allocation &allocation;
+         
+         BindingException(Allocator &allocator, Allocation &allocation, const LPWSTR message);
+      };
+
+      class BoundAllocationException : public BindingException
+      {
+      public:
+         BoundAllocationException(Allocator &allocator, Allocation &allocation);
+      };
+
+      class UnboundAllocationException : public BindingException
+      {
+      public:
+         UnboundAllocationException(Allocator &allocator, Allocation &allocation);
+      };
+
+      class UnmanagedAllocationException : public Exception
+      {
+      public:
+         Allocation &allocation;
+
+         UnmanagedAllocationException(Allocator &allocator, Allocation &allocation);
       };
 
    protected:
@@ -199,19 +252,25 @@ namespace Neurology
    public:
       Allocator(void);
       ~Allocator(void);
-
-      bool isBound(const Allocation &allocation) const;
-      bool isPooled(const LPVOID pointer) const;
-
-      LPVOID pool(SIZE_T size);
-      LPVOID repool(LPVOID address, SIZE_T newSize);
-      void unpool(LPVOID address);
       
-      Allocation &find(const LPVOID address) const;
-      Allocation &null(void);
-      Allocation &allocate(SIZE_T size);
-      void reallocate(Allocation &allocation, SIZE_T size);
-      void deallocate(Allocation &allocation);
+      bool isPooled(const LPVOID pointer) const;
+      bool isAllocated(const Allocation &allocation) const;
+      bool isBound(const Allocation &allocation) const;
+
+      void throwIfNotPooled(const LPVOID pointer) const;
+      void throwIfNotAllocated(const Allocation &allocation) const;
+      void throwIfBound(const Allocation &allocation) const;
+      void throwIfNotBound(const Allocation &allocation) const;
+
+      virtual LPVOID pool(SIZE_T size);
+      virtual LPVOID repool(LPVOID address, SIZE_T newSize);
+      virtual void unpool(LPVOID address);
+      
+      virtual Allocation &find(const LPVOID address);
+      virtual Allocation &null(void);
+      virtual Allocation &allocate(SIZE_T size);
+      virtual void reallocate(Allocation &allocation, SIZE_T size);
+      virtual void deallocate(Allocation &allocation);
       
    protected:
       void bind(Allocation *allocation, LPVOID address);

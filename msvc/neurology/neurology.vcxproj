@@ -146,10 +146,10 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\src\include\neurology.hpp" />
-    <ClInclude Include="..\..\src\include\neurology\circuitry.hpp" />
+    <ClInclude Include="..\..\src\include\neurology\allocators.hpp" />
+    <ClInclude Include="..\..\src\include\neurology\allocators\allocator.hpp" />
     <ClInclude Include="..\..\src\include\neurology\configuration.hpp" />
     <ClInclude Include="..\..\src\include\neurology\exception.hpp" />
-    <ClInclude Include="..\..\src\include\neurology\handle.hpp" />
     <ClInclude Include="..\..\src\include\neurology\heap.hpp" />
     <ClInclude Include="..\..\src\include\neurology\memory.hpp" />
     <ClInclude Include="..\..\src\include\neurology\pe.hpp" />
@@ -159,16 +159,16 @@
     <ClInclude Include="..\..\src\include\neurology\pe\nt.hpp" />
     <ClInclude Include="..\..\src\include\neurology\pe\optional.hpp" />
     <ClInclude Include="..\..\src\include\neurology\pe\section.hpp" />
-    <ClInclude Include="..\..\src\include\neurology\process.hpp" />
-    <ClInclude Include="..\..\src\include\neurology\reference.hpp" />
-    <ClInclude Include="..\..\src\include\neurology\security.hpp" />
+    <ClInclude Include="..\..\src\include\neurology\win32.hpp" />
+    <ClInclude Include="..\..\src\include\neurology\win32\handle.hpp" />
+    <ClInclude Include="..\..\src\include\neurology\win32\process.hpp" />
+    <ClInclude Include="..\..\src\include\neurology\win32\security.hpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\src\lib\circuitry.cpp" />
+    <ClCompile Include="..\..\src\lib\allocators\allocator.cpp" />
+    <ClCompile Include="..\..\src\lib\allocators\heap.cpp" />
     <ClCompile Include="..\..\src\lib\configuration.cpp" />
     <ClCompile Include="..\..\src\lib\exception.cpp" />
-    <ClCompile Include="..\..\src\lib\handle.cpp" />
-    <ClCompile Include="..\..\src\lib\heap.cpp" />
     <ClCompile Include="..\..\src\lib\memory.cpp" />
     <ClCompile Include="..\..\src\lib\pe\dos.cpp" />
     <ClCompile Include="..\..\src\lib\pe\file.cpp" />
@@ -176,9 +176,10 @@
     <ClCompile Include="..\..\src\lib\pe\nt.cpp" />
     <ClCompile Include="..\..\src\lib\pe\optional.cpp" />
     <ClCompile Include="..\..\src\lib\pe\section.cpp" />
-    <ClCompile Include="..\..\src\lib\process.cpp" />
     <ClCompile Include="..\..\src\lib\reference.cpp" />
-    <ClCompile Include="..\..\src\lib\security.cpp" />
+    <ClCompile Include="..\..\src\lib\win32\handle.cpp" />
+    <ClCompile Include="..\..\src\lib\win32\process.cpp" />
+    <ClCompile Include="..\..\src\lib\win32\security.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
