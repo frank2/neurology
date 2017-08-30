@@ -16,10 +16,7 @@ namespace Neurology
 #define PointerData(ptr) Data(static_cast<LPBYTE>(ptr), static_cast<LPBYTE>((ptr)+1))
 #define BlockData(ptr, size) Data(static_cast<LPBYTE>(ptr), static_cast<LPBYTE>(ptr)+size)
 
-   extern "C"
-   {
-      bool CopyData(LPVOID destination, const LPVOID source, SIZE_T size);
-   };
+   bool CopyData(LPVOID destination, const LPVOID source, SIZE_T size);
 
    class Allocator;
    
@@ -96,12 +93,12 @@ namespace Neurology
    public:
       Allocation(void);
       Allocation(Allocator *allocator);
-      Allocation(const Allocation &allocation);
       Allocation(Allocation &allocation);
+      Allocation(const Allocation *allocation);
       ~Allocation(void);
 
       void operator=(Allocation &allocation);
-      void operator=(const Allocation &allocation);
+      void operator=(const Allocation *allocation);
       LPVOID operator*(void);
       const LPVOID operator*(void) const;
 
@@ -144,7 +141,7 @@ namespace Neurology
          if (sizeof(Type) > this->size)
             throw InsufficientSizeException(*this, sizeof(Type));
          else if (sizeof(Type)+offset > this->size)
-            throw OffsetOutOfBoundsException(*this, offset, sizeof(Type));
+            throw OffsetOutOfRangeException(*this, offset, sizeof(Type));
 
          return static_cast<Type *>(this->address(offset));
       }
@@ -154,7 +151,7 @@ namespace Neurology
          if (sizeof(Type) > this->size)
             throw InsufficientSizeException(*this, sizeof(Type));
          else if (sizeof(Type)+offset > this->size)
-            throw OffsetOutOfBoundsException(*this, offset, sizeof(Type));
+            throw OffsetOutOfRangeException(*this, offset, sizeof(Type));
 
          return const_cast<const Type *>(static_cast<Type *>(this->address(offset)));
       }
@@ -310,64 +307,65 @@ namespace Neurology
          };
          
       protected:
-         Allocation allocation;
+         Allocation &allocation;
          
       public:
          Object(void)
-            : Base()
+            : allocation(AllocatorInstance.null())
+            , Base()
          {
             if (PointerHint == 0)
-               this->allocate(sizeof(Type));
+               this->allocation.allocate<Type>();
             else
-               this->allocate(PointerHint);
-
-            this->construct();
+               this->allocation.allocate<Type>(PointerHint);
          }
 
          Object(Base &object)
-            : Base(object)
+            : allocation(AllocatorInstance.null())
+            , Base(object)
          {
          }
 
-         Object(const Base &object)
-            : Base(object)
+         Object(const Base *object)
+            : allocation(AllocatorInstance.null())
+            , Base(object)
          {
-         }
-
-         Object(Type &value)
-            : Base()
-            , built(false)
-         {
-            if (PointerHint != 0)
-               throw BadPointerHintException(*this);
-
-            this->allocate(sizeof(Type));
-            this->construct(value);
          }
 
          Object(const Type &value)
-            : Base()
-            , built(false)
+            : allocation(AllocatorInstance.null())
+            , Base()
          {
             if (PointerHint != 0)
                throw BadPointerHintException(*this);
 
-            this->allocate(sizeof(Type));
-            this->construct(value);
+            this->allocation.allocate<Type>();
+            this->assign(value);
+         }
+
+         Object(const Type *value)
+            : allocation(AllocatorInstance.null())
+            , Base(value)
+
+         {
+         }
+
+         Object(const Type *value, SIZE_T size)
+            : allocation(AllocatorInstance.null())
+            , Base(value, size)
+         {
          }
 
          ~Object(void)
          {
-            LPVOID pointer;
-            
             if (!this->allocation.isValid())
                return;
-            
-            pointer = this->allocation.address();
-            this->allocation.deallocate();
 
-            if (!AllocatorInstance.isPooled(pointer))
+            /* this allocation is the allocator's last binding. prepare to die. */
+            if (AllocatorInstance.bindCount(this->allocation.address()) == 1)
                this->destruct();
+
+            this->allocation.deallocate();
          }
 
          virtual void operator=(Object &object)
@@ -375,21 +373,21 @@ namespace Neurology
             this->allocation.copy(object.allocation);
          }
 
-         virtual void operator=(const Object &object)
+         virtual void operator=(const Object *object)
          {
-            this->allocation.clone(object.allocation);
+            this->allocation.clone(object->allocation);
          }
 
          virtual void assign(const Type *pointer)
          {
             if (this->allocation.isValid())
-               this->assign(pointer, this->allocation.getSize());
+               Base::assign(pointer, this->allocation.getSize());
             else
             {
                if (PointerHint == 0)
-                  this->assign(pointer, sizeof(Type));
+                  Base::assign(pointer, sizeof(Type));
                else
-                  this->assign(pointer, PointerHint);
+                  Base::assign(pointer, PointerHint);
             }
          }
 
@@ -401,25 +399,28 @@ namespace Neurology
                throw Allocation::InsufficientSizeException(this->allocation, size);
 
             this->allocation.write(pointer, size);
+            this->built = true;
          }
 
          virtual void reassign(const Type *pointer)
          {
+            /* C++ doesn't recognize that it's fucking inhereted the functions
+               of its parent for some reason... sigh. */
             if (this->allocation.isValid())
-               this->reassign(pointer, this->allocation.getSize());
+               Base::reassign(pointer, this->allocation.getSize());
             else
             {
                if (PointerHint == 0)
-                  this->reassign(pointer, sizeof(Type));
+                  Base::reassign(pointer, sizeof(Type));
                else
-                  this->reassign(pointer, PointerHint);
+                  Base::reassign(pointer, PointerHint);
             }
          }
 
          virtual void reassign(const LPVOID pointer, SIZE_T size)
          {
             if (!this->allocation.isValid())
-               this->allocation.allocate<Type>(size);
+               this->allocation = AllocatorInstance.allocate<Type>(size);
             else if (this->allocation.getSize() != size)
                this->allocation.reallocate<Type>(size);
 
@@ -446,7 +447,7 @@ namespace Neurology
    protected:
       std::map<LPVOID, SIZE_T> memoryPool;
       std::set<Allocation *> allocations;
-      std::map<LPVOID, std::set<Allocation *> > bindings;
+      std::map<const LPVOID, std::set<Allocation *> > bindings;
 
    public:
       Allocator(void);
@@ -479,6 +480,8 @@ namespace Neurology
       void throwIfNotAllocated(const Allocation &allocation) const;
       void throwIfBound(const Allocation &allocation) const;
       void throwIfNotBound(const Allocation &allocation) const;
+
+      SIZE_T bindCount(LPVOID address) const;
 
       virtual LPVOID pool(SIZE_T size);
       virtual LPVOID repool(LPVOID address, SIZE_T newSize);
@@ -521,5 +524,6 @@ namespace Neurology
       void unbind(Allocation *allocation);
    };
 
-   template <class Type, SIZE_T PointerHint=0> typedef Allocator::Object<Type, PointerHint, Allocator::Instance> LocalObject;
+   template <class Type, SIZE_T PointerHint=0>
+   using LocalObject = Allocator::Object<Type, PointerHint, Allocator::Instance>;
 }

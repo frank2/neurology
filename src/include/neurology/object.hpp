@@ -33,6 +33,33 @@ namespace Neurology
          }
       };
 
+      class ConstructionException : public Exception
+      {
+      public:
+         ConstructionException(const Object &object, const LPWSTR message)
+            : Exception(object, message)
+         {
+         }
+      };
+
+      class AlreadyConstructedException : public ConstructionException
+      {
+      public:
+         AlreadyConstructedException(const Object &object)
+            : ConstructionException(object, EXCSTR(L"Object already constructed."))
+         {
+         }
+      };
+
+      class NeverConstructedException : public ConstructionException
+      {
+      public:
+         NeverConstructedException(const Object &object)
+            : ConstructionException(object, EXCSTR(L"Object never constructed."))
+         {
+         }
+      };
+
    protected:
       bool built;
 
@@ -46,12 +73,6 @@ namespace Neurology
          : built(false)
       {
          throw VoidObjectException(*this);
-      }
-
-      Object(Type &value)
-         : built(true)
-      {
-         this->reassign(value);
       }
 
       Object(const Type &value)
@@ -72,12 +93,6 @@ namespace Neurology
          this->reassign(pointer, size);
       }
       
-      Object(Object &object)
-         : built(object.built)
-      {
-         *this = object;
-      }
-      
       Object(const Object &object)
          : built(object.built)
       {
@@ -89,20 +104,10 @@ namespace Neurology
          if (this->built)
             this->destruct();
       }
-
-      virtual void operator=(Object &object)
-      {
-         *this = *object;
-      }
       
       virtual void operator=(const Object &object)
       {
          *this = *object;
-      }
-
-      virtual void operator=(Type &value)
-      {
-         **this = value;
       }
 
       virtual void operator=(const Type &value)
@@ -115,12 +120,12 @@ namespace Neurology
          **this = *pointer;
       }
 
-      virtual Type operator*(void)
+      virtual Type &operator*(void)
       {
          return this->resolve();
       }
 
-      virtual const Type operator*(void) const
+      virtual const Type &operator*(void) const
       {
          return this->resolve();
       }
@@ -364,16 +369,6 @@ namespace Neurology
          return **this;
       }
 
-      virtual Type &operator[](const int index)
-      {
-         return **this[index];
-      }
-
-      virtual const Type &operator[](const int index) const
-      {
-         return **this[index];
-      }
-
       virtual Type *operator->(void)
       {
          return this->pointer();
@@ -396,7 +391,9 @@ namespace Neurology
 
       virtual void assign(const Type *pointer, SIZE_T size)
       {
-         this->assign(const_cast<LPVOID>(pointer), size);
+         this->assign(const_cast<const LPVOID>(
+                         static_cast<LPVOID>(
+                            const_cast<Type *>(pointer))), size);
       }
 
       virtual void assign(const LPVOID pointer, SIZE_T size)
@@ -416,7 +413,9 @@ namespace Neurology
 
       virtual void reassign(const Type *pointer, SIZE_T size)
       {
-         this->reassign(const_cast<LPVOID>(pointer), size);
+         this->reassign(const_cast<const LPVOID>(
+                           static_cast<LPVOID>(
+                              const_cast<Type *>(pointer))), size);
       }
 
       virtual void reassign(const LPVOID pointer, SIZE_T size)
@@ -434,12 +433,12 @@ namespace Neurology
          throw VoidObjectException(*this);
       }
 
-      virtual Type resolve(void)
+      virtual Type &resolve(void)
       {
          return *this->pointer();
       }
 
-      virtual const Type resolve(void) const
+      virtual const Type &resolve(void) const
       {
          return *this->pointer();
       }

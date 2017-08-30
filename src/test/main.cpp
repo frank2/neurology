@@ -8,6 +8,7 @@ main
 (int argc, char *argv[])
 {
    LocalObject<int> intTest;
+   int fuck = intTest.resolve();
 
-   intTest = 0;
+   return *intTest;
 }

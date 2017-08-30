@@ -5,7 +5,7 @@ using namespace Neurology;
 Allocator Allocator::Instance;
 
 bool
-CopyData
+Neurology::CopyData
 (LPVOID destination, const LPVOID source, SIZE_T size)
 {
    __try
@@ -106,13 +106,13 @@ Allocation::Allocation
 }
 
 Allocation::Allocation
-(const Allocation &allocation)
+(Allocation &allocation)
 {
    *this = allocation;
 }
 
 Allocation::Allocation
-(Allocation &allocation)
+(const Allocation *allocation)
 {
    *this = allocation;
 }
@@ -144,16 +144,16 @@ Allocation::operator=
    
 void
 Allocation::operator=
-(const Allocation &allocation)
+(const Allocation *allocation)
 {
-   this->allocator = allocation.allocator;
+   this->allocator = allocation->allocator;
    
-   if (allocation.isValid())
-      this->clone(allocation);
+   if (allocation->isValid())
+      this->clone(*allocation);
    else
    {
-      this->pointer = allocation.pointer;
-      this->size = allocation.size;
+      this->pointer = allocation->pointer;
+      this->size = allocation->size;
    }
 }
 
@@ -527,11 +527,13 @@ Allocation::copy
 (Allocation &allocation)
 {
    allocation.throwIfInvalid();
-   
-   if (this->size < allocation.size)
-      throw InsufficientSizeException(*this, allocation.size);
 
-   this->write(allocation.read());
+   this->allocator = allocation.allocator;
+
+   if (this->isBound())
+      this->allocator->rebind(this, allocation.pointer);
+   else
+      this->allocator->bind(this, allocation.pointer);
 }
 
 void
@@ -623,16 +625,24 @@ Allocator::~Allocator
 (void)
 {
    /* unbind all allocation bindings */
-   for (std::map<LPVOID, std::set<Allocation *> >::iterator iter=this->bindings.begin();
-        iter != this->bindings.end();
-        ++iter)
+   std::map<LPVOID, std::set<Allocation *> >::iterator iter = this->bindings.begin();
+
+   while (iter != this->bindings.end())
    {
-      for (std::set<Allocation *>::iterator setIter=this->bindings[iter->first].begin();
-           setIter != this->bindings[iter->first].end();
-           ++setIter)
+      if (iter->second.begin() != iter->second.end())
+         this->unbind(*iter->second.begin());
+      else
       {
-         this->unbind(*setIter);
+         /* the binding set is empty, check if it's still pooled.
+            if so, erase it. */
+         if (this->isPooled(iter->first))
+            this->unpool(iter->first);
+         
+         this->bindings.erase(iter->first);
       }
+
+      /* unbinding may have misplaced the iterator-- start over from the beginning */
+      iter = this->bindings.begin();
    }
              
    /* if there are any allocations left, delete them */
@@ -732,6 +742,20 @@ Allocator::throwIfNotBound
       throw UnboundAllocationException(const_cast<Allocator &>(*this), const_cast<Allocation &>(allocation));
 }
 
+SIZE_T
+Allocator::bindCount
+(const LPVOID address) const
+{
+   std::map<const LPVOID, std::set<Allocation *> >::const_iterator bindIter;
+
+   bindIter = this->bindings.find(address);
+
+   if (bindIter == this->bindings.end())
+      return 0;
+
+   return bindIter->second.size();
+}
+
 LPVOID
 Allocator::pool
 (SIZE_T size)
@@ -788,11 +812,11 @@ void
 Allocator::unpool
 (LPVOID address)
 {
-   std::map<LPVOID, std::set<Allocation *> >::iterator bindIter;
+   std::map<const LPVOID, std::set<Allocation *> >::iterator bindIter;
    
    this->throwIfNotPooled(address);
 
-   bindIter = this->bindings.find(address);
+   bindIter = this->bindings.find(const_cast<const LPVOID>(address));
 
    if (bindIter != this->bindings.end())
    {
@@ -807,7 +831,7 @@ Allocator::unpool
    }
 
    ZeroMemory(address, this->memoryPool[address]);
-   delete[] address;
+   delete[] static_cast<LPBYTE>(address);
    this->memoryPool.erase(address);
 }
 
