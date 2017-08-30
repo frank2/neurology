@@ -4,6 +4,21 @@ using namespace Neurology;
 
 Allocator Allocator::Instance;
 
+bool
+CopyData
+(LPVOID destination, const LPVOID source, SIZE_T size)
+{
+   __try
+   {
+      CopyMemory(destination, source, size);
+      return true;
+   }
+   __except (GetExceptionCode() == STATUS_ACCESS_VIOLATION)
+   {
+      return false;
+   }
+}
+
 Allocation::Exception::Exception
 (const Allocation &allocation, const LPWSTR message)
    : Neurology::Exception(message)
@@ -91,13 +106,13 @@ Allocation::Allocation
 }
 
 Allocation::Allocation
-(Allocation &allocation)
+(const Allocation &allocation)
 {
    *this = allocation;
 }
 
 Allocation::Allocation
-(const Allocation &allocation)
+(Allocation &allocation)
 {
    *this = allocation;
 }
@@ -430,6 +445,7 @@ Allocation::read
    }
    catch (AddressOutOfRangeException &exception)
    {
+      UNUSED(exception);
       throw OffsetOutOfRangeException(*this, offset, size);
    }
 }
@@ -459,6 +475,7 @@ Allocation::write
    }
    catch (AddressOutOfRangeException &exception)
    {
+      UNUSED(exception);
       throw OffsetOutOfRangeException(*this, offset, size);
    }
 }
@@ -488,10 +505,11 @@ Allocation::write
 {
    try
    {
-      this->write(this-address(offset), pointer, size);
+      this->write(this->address(offset), pointer, size);
    }
    catch (AddressOutOfRangeException &exception)
    {
+      UNUSED(exception);
       throw OffsetOutOfRangeException(*this, offset, size);
    }
 }
@@ -506,7 +524,7 @@ Allocation::write
 
 void
 Allocation::copy
-(const Allocation &allocation)
+(Allocation &allocation)
 {
    allocation.throwIfInvalid();
    
@@ -590,7 +608,7 @@ Allocator::BadPointerException::BadPointerException
 }
 
 Allocator::InsufficientSizeException::InsufficientSizeException
-(const Allocator &allocator, const SIZE_T size)
+(Allocator &allocator, const SIZE_T size)
    : Allocator::Exception(allocator, EXCSTR(L"Supplied size not large enough for supplied type."))
    , size(size)
 {
@@ -745,7 +763,9 @@ Allocator::repool
    this->throwIfNotPooled(address);
 
    newPool = this->pool(size);
-   CopyMemory(newPool, address, min(size, this->memoryPool[address]));
+   
+   if (!CopyData(newPool, address, min(size, this->memoryPool[address])))
+      throw BadPointerException(*this, this->null(), const_cast<const LPVOID>(address), min(size, this->memoryPool[address]));
 
    bindIter = this->bindings.find(address);
 
@@ -801,7 +821,7 @@ Allocator::find
    return **this->bindings[address].begin();
 }
 
-Allocation &
+Allocation
 Allocator::null
 (void)
 {
@@ -812,12 +832,11 @@ Allocation &
 Allocator::allocate
 (SIZE_T size)
 {
-   LPVOID newPool;
    Allocation *newAllocation;
 
    newAllocation = new Allocation(this, this->pool(size), size);
    this->allocations.insert(newAllocation);
-   this->bind(newAllocation, newPool);
+   this->bind(newAllocation, newAllocation->address());
 
    return *newAllocation;
 }
@@ -847,16 +866,14 @@ Data
 Allocator::read
 (const Allocation &allocation, const LPVOID address, SIZE_T size) const
 {
+   Data data(size);
+   
    allocation.throwIfNotInRange(address, size);
 
-   __try
-   {
-      return BlockData(address, size);
-   }
-   __except (GetExceptionCode() == STATUS_ACCESS_VIOLATION)
-   {
+   if (!CopyData(data.data(), address, size))
       throw BadPointerException(const_cast<Allocator &>(*this), const_cast<Allocation &>(allocation), address, size);
-   }
+
+   return data;
 }
 
 void
@@ -865,14 +882,8 @@ Allocator::write
 {
    allocation.throwIfNotInRange(address, size);
 
-   __try
-   {
-      CopyMemory(address, pointer, size);
-   }
-   __except (GetExceptionCode() == STATUS_ACCESS_VIOLATION)
-   {
+   if (!CopyData(address, pointer, size))
       throw BadPointerException(*this, allocation, address, size);
-   }
 }
 
 void
@@ -936,6 +947,9 @@ Allocator::unbind
 
    if (bindings == 0)
       this->bindings.erase(boundAddress);
+
+   allocation->pointer = NULL;
+   allocation->size = 0;
 
    /* if we're unbinding the allocation and we created the allocation object, this is where we want to
       delete it. */

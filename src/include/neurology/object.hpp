@@ -2,88 +2,117 @@
 
 #include <windows.h>
 
-#include <neurology/allocators/allocator.hpp>
+#include <new>
+
 #include <neurology/exception.hpp>
 
 namespace Neurology
 {
-   template <class Type, SIZE_T PointerHint=0, Allocator &AllocatorObject = Allocator::Instance>
+   template <class Type>
    class Object
    {
+   public:
+      class Exception : public Neurology::Exception
+      {
+      public:
+         const Object &object;
+
+         Exception(const Object &object, const LPWSTR message)
+            : Neurology::Exception(message)
+            , object(object)
+         {
+         }
+      };
+
+      class VoidObjectException : public Exception
+      {
+      public:
+         VoidObjectException(const Object &object)
+            : Exception(object, EXCSTR(L"The object is void."))
+         {
+         }
+      };
+
    protected:
-      Allocation allocation;
+      bool built;
 
    public:
       Object(void)
+         : built(false)
       {
-         if (PointerHint == 0)
-            this->allocation = AllocatorObject.allocate<Type>();
-         else
-            this->allocation = AllocatorObject.allocate<Type>(PointerHint);
+      }
+
+      Object(SIZE_T size)
+         : built(false)
+      {
+         throw VoidObjectException(*this);
       }
 
       Object(Type &value)
+         : built(true)
       {
-         if (PointerHint != 0)
-            throw BadPointerHintException(*this);
-
-         this->assign(value);
+         this->reassign(value);
       }
 
       Object(const Type &value)
+         : built(true)
       {
-         if (PointerHint != 0)
-            throw BadPointerHintException(*this);
-
-         this->assign(value);
+         this->reassign(value);
       }
 
       Object(const Type *pointer)
+         : built(true)
       {
-         if (PointerHint == 0)
-            this->assign(pointer, sizeof(Type));
-         else
-            this->assign(pointer, PointerHint);
+         this->reassign(pointer, sizeof(Type));
       }
 
       Object(const Type *pointer, SIZE_T size)
+         : built(true)
       {
-         this->assign(pointer, size);
+         this->reassign(pointer, size);
       }
       
       Object(Object &object)
+         : built(object.built)
       {
          *this = object;
       }
       
       Object(const Object &object)
+         : built(object.built)
       {
          *this = object;
       }
 
+      ~Object(void)
+      {
+         if (this->built)
+            this->destruct();
+      }
+
       virtual void operator=(Object &object)
       {
-         this->allocation.copy(object.allocation);
+         *this = *object;
       }
       
       virtual void operator=(const Object &object)
       {
-         this->allocation.clone(object.allocation);
+         *this = *object;
       }
 
       virtual void operator=(Type &value)
       {
-         this->assign(value);
+         **this = value;
       }
 
       virtual void operator=(const Type &value)
       {
-         this->assign(value);
+         **this = value;
       }
 
       virtual void operator=(const Type *pointer)
       {
-         this->assign(pointer);
+         **this = *pointer;
       }
 
       virtual Type operator*(void)
@@ -91,11 +120,10 @@ namespace Neurology
          return this->resolve();
       }
 
-      virtual const Type operator*(void)
+      virtual const Type operator*(void) const
       {
          return this->resolve();
       }
-
       
       virtual Type operator+(const Type &right)
       {
@@ -171,27 +199,27 @@ namespace Neurology
          return **this;
       }
 
-      virtual bool operator==(const Type right) const
+      virtual bool operator==(const Type &right) const
       {
          return **this == right;
       }
 
-      virtual bool operator!=(const Type right) const
+      virtual bool operator!=(const Type &right) const
       {
          return **this != right;
       }
 
-      virtual bool operator>(const Type right) const
+      virtual bool operator>(const Type &right) const
       {
          return **this > right;
       }
 
-      virtual bool operator<(const Type right) const
+      virtual bool operator<(const Type &right) const
       {
          return **this < right;
       }
 
-      virtual bool operator>=(const Type right) const
+      virtual bool operator>=(const Type &right) const
       {
          return **this >= right;
       }
@@ -206,7 +234,7 @@ namespace Neurology
          return !**this;
       }
 
-      virtual bool operator&&(const Type right) const
+      virtual bool operator&&(const Type &right) const
       {
          return **this && right;
       }
@@ -216,91 +244,121 @@ namespace Neurology
          return **this || right;
       }
 
-      virtual Type operator~(void) const
+      virtual Type operator~(void)
       {
          return ~**this;
       }
 
-      virtual Type operator&(const Type right) const
+      virtual const Type operator~(void) const
+      {
+         return ~**this;
+      }
+
+      virtual Type operator&(const Type &right)
       {
          return **this & right;
       }
 
-      virtual Type operator|(const Type right) const
+      virtual const Type operator&(const Type &right) const
+      {
+         return **this & right;
+      }
+
+      virtual Type operator|(const Type &right)
       {
          return **this | right;
       }
 
-      virtual Type operator^(const Type right) const
+      virtual const Type operator|(const Type &right) const
+      {
+         return **this | right;
+      }
+
+      virtual Type operator^(const Type &right)
       {
          return **this ^ right;
       }
 
-      virtual Type operator<<(const Type right) const
+      virtual const Type operator^(const Type &right) const
+      {
+         return **this ^ right;
+      }
+
+      virtual Type operator<<(const Type &right)
       {
          return **this << right;
       }
 
-      virtual Type operator>>(const Type right) const
+      virtual const Type operator<<(const Type &right) const
+      {
+         return **this << right;
+      }
+
+      virtual Type operator>>(const Type &right)
       {
          return **this >> right;
       }
 
-      virtual Type &operator+=(const Type right)
+      virtual const Type operator>>(const Type &right) const
+      {
+         return **this >> right;
+      }
+
+      virtual Type &operator+=(const Type &right)
       {
          **this = **this + right;
          return **this;
       }
 
-      virtual Type &operator-=(const Type right)
+      virtual Type &operator-=(const Type &right)
       {
          **this = **this - right;
          return **this;
       }
 
-      virtual Type &operator*=(const Type right)
+      virtual Type &operator*=(const Type &right)
       {
          **this = **this * right;
          return **this;
       }
 
-      virtual Type &operator/=(const Type right)
+      virtual Type &operator/=(const Type &right)
       {
          **this = **this / right;
          return **this;
       }
 
-      virtual Type &operator%=(const Type right)
+      virtual Type &operator%=(const Type &right)
       {
          **this = **this % right;
          return **this;
       }
 
-      virtual Type &operator&=(const Type right)
+      virtual Type &operator&=(const Type &right)
       {
          **this = **this & right;
          return **this;
       }
 
-      virtual Type &operator|=(const Type right)
+      virtual Type &operator|=(const Type &right)
       {
          **this = **this | right;
          return **this;
       }
 
-      virtual Type &operator^=(const Type right)
+      virtual Type &operator^=(const Type &right)
       {
          **this = **this ^ right;
          return **this;
       }
 
-      virtual Type &operator<<=(const Type right)
+      virtual Type &operator<<=(const Type &right)
       {
          **this = **this << right;
          return **this;
       }
 
-      virtual Type &operator>>=(const Type right)
+      virtual Type &operator>>=(const Type &right)
       {
          **this = **this >> right;
          return **this;
@@ -326,69 +384,83 @@ namespace Neurology
          return this->pointer();
       }
       
-      void assign(const Type &value)
+      virtual void assign(const Type &value)
       {
-         this->assign(const_cast<LPVOID>(&value), sizeof(Type));
+         this->assign(&value, sizeof(Type));
       }
 
-      void assign(const Type *pointer)
+      virtual void assign(const Type *pointer)
       {
-         if (!this->hasData())
-         {
-            if (PointerHint == 0)
-               this->assign(const_cast<LPVOID>(pointer), sizeof(Type));
-            else
-               this->assign(const_cast<LPVOID>(pointer), PointerHint);
-         }
-         else
-            this->assign(const_cast<LPVOID>(pointer), this->size);
+         this->assign(pointer, sizeof(Type));
       }
 
-      void reassign(const Type &value)
+      virtual void assign(const Type *pointer, SIZE_T size)
       {
-         this->reassign(const_cast<LPVOID>(&value), sizeof(Type));
+         this->assign(const_cast<LPVOID>(pointer), size);
       }
 
-      void reassign(const Type *pointer)
+      virtual void assign(const LPVOID pointer, SIZE_T size)
       {
-         if (!this->hasData())
-         {
-            if (PointerHint == 0)
-               this->reassign(const_cast<LPVOID>(pointer), sizeof(Type));
-            else
-               this->reassign(const_cast<LPVOID>(pointer), PointerHint);
-         }
-         else
-            this->reassign(const_cast<LPVOID>(pointer), this->size);
+         throw VoidObjectException(*this);
       }
 
-      Type *pointer(void)
+      virtual void reassign(const Type &value)
       {
-         this->throwIfNoData();
+         this->reassign(&value, sizeof(Type));
+      }
+
+      virtual void reassign(const Type *pointer)
+      {
+         this->reassign(pointer, sizeof(Type));
+      }
+
+      virtual void reassign(const Type *pointer, SIZE_T size)
+      {
+         this->reassign(const_cast<LPVOID>(pointer), size);
+      }
+
+      virtual void reassign(const LPVOID pointer, SIZE_T size)
+      {
+         throw VoidObjectException(*this);
+      }
+
+      virtual Type *pointer(void)
+      {
+         throw VoidObjectException(*this);
+      }
+
+      virtual const Type *pointer(void) const
+      {
+         throw VoidObjectException(*this);
+      }
+
+      virtual Type resolve(void)
+      {
+         return *this->pointer();
+      }
+
+      virtual const Type resolve(void) const
+      {
+         return *this->pointer();
+      }
+
+      template <class ... Args>
+      void construct(Args... args)
+      {
+         if (this->built)
+            throw AlreadyConstructedException(*this);
          
-         return static_cast<Type *>(this->deref());
+         new (this->pointer()) Type(args...);
+         this->built = true;
       }
 
-      const Type *pointer(void) const
+      void destruct(void)
       {
-         this->throwIfNoData();
-
-         return const_cast<Type *>(this->deref());
+         if (!this->built)
+            throw NeverConstructedException(*this);
+         
+         this->pointer()->~Type();
+         this->built = false;
       }
-
-      Type resolve(void)
-      {
-         return *this->pointer();
-      }
-
-      const Type resolve(void) const
-      {
-         return *this->pointer();
-      }
-   };
-
-   template <class Type, SIZE_T PointerHint=0>
-   class LocalObject : public Object<Type, PointerHint, Allocator::Instance>
-   {
    };
 }

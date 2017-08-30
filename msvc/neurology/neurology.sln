@@ -5,6 +5,11 @@ VisualStudioVersion = 14.0.25420.1
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "neurology", "neurology.vcxproj", "{1046A2B8-6829-438A-8163-D8374E9061C8}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "neurology-test", "..\neurology-test\neurology-test.vcxproj", "{B2F6F6D0-09C1-4C06-A85E-38A539AEE9A9}"
+	ProjectSection(ProjectDependencies) = postProject
+		{1046A2B8-6829-438A-8163-D8374E9061C8} = {1046A2B8-6829-438A-8163-D8374E9061C8}
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -21,6 +26,14 @@ Global
 		{1046A2B8-6829-438A-8163-D8374E9061C8}.Release|x64.Build.0 = Release|x64
 		{1046A2B8-6829-438A-8163-D8374E9061C8}.Release|x86.ActiveCfg = Release|Win32
 		{1046A2B8-6829-438A-8163-D8374E9061C8}.Release|x86.Build.0 = Release|Win32
+		{B2F6F6D0-09C1-4C06-A85E-38A539AEE9A9}.Debug|x64.ActiveCfg = Debug|x64
+		{B2F6F6D0-09C1-4C06-A85E-38A539AEE9A9}.Debug|x64.Build.0 = Debug|x64
+		{B2F6F6D0-09C1-4C06-A85E-38A539AEE9A9}.Debug|x86.ActiveCfg = Debug|Win32
+		{B2F6F6D0-09C1-4C06-A85E-38A539AEE9A9}.Debug|x86.Build.0 = Debug|Win32
+		{B2F6F6D0-09C1-4C06-A85E-38A539AEE9A9}.Release|x64.ActiveCfg = Release|x64
+		{B2F6F6D0-09C1-4C06-A85E-38A539AEE9A9}.Release|x64.Build.0 = Release|x64
+		{B2F6F6D0-09C1-4C06-A85E-38A539AEE9A9}.Release|x86.ActiveCfg = Release|Win32
+		{B2F6F6D0-09C1-4C06-A85E-38A539AEE9A9}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
