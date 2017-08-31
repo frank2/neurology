@@ -286,13 +286,13 @@ namespace Neurology
       class Object : public Neurology::Object<Type>
       {
       public:
-         typedef Neurology::Object<Type> Base;
+         typedef Neurology::Object<Type> ObjectBase;
          
-         class Exception : public Base::Exception
+         class Exception : public ObjectBase::Exception
          {
          public:
-            Exception(const Base &object, const LPWSTR message)
-               : Base::Exception(object, message)
+            Exception(const ObjectBase &object, const LPWSTR message)
+               : ObjectBase::Exception(object, message)
             {
             }
          };
@@ -300,7 +300,7 @@ namespace Neurology
          class BadPointerHintException : public Exception
          {
          public:
-            BadPointerHintException(const Base &object)
+            BadPointerHintException(const ObjectBase &object)
                : Exception(object, EXCSTR(L"Pointer hint must be zero when constructing from a value type."))
             {
             }
@@ -311,7 +311,7 @@ namespace Neurology
          
       public:
          Object(void)
-            : Base()
+            : ObjectBase()
             , allocation(AllocatorInstance.null())
          {
             if (PointerHint == 0)
@@ -321,27 +321,27 @@ namespace Neurology
          }
 
          Object(SIZE_T size)
-            : Base()
+            : ObjectBase()
             , allocation(AllocatorInstance.allocate(size))
          {
          }
 
          Object(Object &object)
-            : Base()
+            : ObjectBase()
             , allocation(AllocatorInstance.null())
          {
             *this = object;
          }
 
          Object(const Object *object)
-            : Base()
+            : ObjectBase()
             , allocation(AllocatorInstance.null())
          {
             *this = object;
          }
 
          Object(const Type &value)
-            : Base()
+            : ObjectBase()
             , allocation(AllocatorInstance.null())
          {
             if (PointerHint != 0)
@@ -352,7 +352,7 @@ namespace Neurology
          }
 
          Object(const Type *value)
-            : Base()
+            : ObjectBase()
             , allocation(AllocatorInstance.null())
          {
             if (PointerHint == 0)
@@ -364,7 +364,7 @@ namespace Neurology
          }
 
          Object(const Type *value, SIZE_T size)
-            : Base()
+            : ObjectBase()
             , allocation(AllocatorInstance.null())
          {
             this->allocation.allocate<Type>(size);
@@ -424,7 +424,7 @@ namespace Neurology
                this->construct(value);
             }
             else
-               this->reassign(value);
+               this->reassign(&value);
          }
 
          void operator=(const Type *value)
@@ -437,19 +437,19 @@ namespace Neurology
                this->construct(*value);
             }
             else
-               this->reassign(*value);
+               this->reassign(*value, sizeof(Type));
          }
 
          void assign(const Type *pointer)
          {
             if (this->allocation.isValid())
-               Base::assign(pointer, this->allocation.getSize());
+               ObjectBase::assign(pointer, this->allocation.getSize());
             else
             {
                if (PointerHint == 0)
-                  Base::assign(pointer, sizeof(Type));
+                  ObjectBase::assign(pointer, sizeof(Type));
                else
-                  Base::assign(pointer, PointerHint);
+                  ObjectBase::assign(pointer, PointerHint);
             }
          }
          
@@ -468,13 +468,13 @@ namespace Neurology
             /* C++ doesn't recognize that it's fucking inhereted the functions
                of its parent for some reason... sigh. */
             if (this->allocation.isValid())
-               Base::reassign(pointer, this->allocation.getSize());
+               ObjectBase::reassign(pointer, this->allocation.getSize());
             else
             {
                if (PointerHint == 0)
-                  Base::reassign(pointer, sizeof(Type));
+                  ObjectBase::reassign(pointer, sizeof(Type));
                else
-                  Base::reassign(pointer, PointerHint);
+                  ObjectBase::reassign(pointer, PointerHint);
             }
          }
 

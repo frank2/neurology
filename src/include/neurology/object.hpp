@@ -3,6 +3,7 @@
 #include <windows.h>
 
 #include <new>
+#include <type_traits>
 
 #include <neurology/exception.hpp>
 
@@ -22,6 +23,12 @@ namespace Neurology
    class Object
    {
    public:
+      typedef Type BaseType;
+      typedef Type *PointedType;
+      typedef typename std::remove_pointer<Type>::type UnpointedType;
+      typedef typename std::remove_extent<Type>::type ParentExtentType;
+      typedef typename std::remove_all_extents<Type>::type ArrayBaseType;
+      
       class Exception : public Neurology::Exception
       {
       public:
@@ -144,13 +151,6 @@ namespace Neurology
       {
          return this->resolve();
       }
-
-      Type &operator[](const int index)
-      {
-         std::static_assert(std::is_pointer<Type>::value || std::is_array<Type>::value
-                            ,"operator[] only available if the type is a pointer or an array.");
-
-         
       
       Type operator+(const Type &right)
       {
