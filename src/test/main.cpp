@@ -7,8 +7,7 @@ int
 main
 (int argc, char *argv[])
 {
-   LocalObject<int> intTest;
-   int fuck = intTest.resolve();
-
+   LocalObject<int> intTest = LocalObject<int>::New(0);
+   intTest = 69; // nice
    return *intTest;
 }

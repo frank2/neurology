@@ -311,8 +311,8 @@ namespace Neurology
          
       public:
          Object(void)
-            : allocation(AllocatorInstance.null())
-            , Base()
+            : Base()
+            , allocation(AllocatorInstance.null())
          {
             if (PointerHint == 0)
                this->allocation.allocate<Type>();
@@ -320,40 +320,58 @@ namespace Neurology
                this->allocation.allocate<Type>(PointerHint);
          }
 
-         Object(Base &object)
-            : allocation(AllocatorInstance.null())
-            , Base(object)
+         Object(SIZE_T size)
+            : Base()
+            , allocation(AllocatorInstance.allocate(size))
          {
          }
 
-         Object(const Base *object)
-            : allocation(AllocatorInstance.null())
-            , Base(object)
+         Object(Object &object)
+            : Base()
+            , allocation(AllocatorInstance.null())
          {
+            *this = object;
+         }
+
+         Object(const Object *object)
+            : Base()
+            , allocation(AllocatorInstance.null())
+         {
+            *this = object;
          }
 
          Object(const Type &value)
-            : allocation(AllocatorInstance.null())
-            , Base()
+            : Base()
+            , allocation(AllocatorInstance.null())
          {
             if (PointerHint != 0)
                throw BadPointerHintException(*this);
 
             this->allocation.allocate<Type>();
-            this->assign(value);
+            this->construct(value);
          }
 
          Object(const Type *value)
-            : allocation(AllocatorInstance.null())
-            , Base(value)
-
+            : Base()
+            , allocation(AllocatorInstance.null())
          {
+            if (PointerHint == 0)
+               this->allocation.allocate<Type>();
+            else
+               this->allocation.allocate<Type>(PointerHint);
+
+            this->construct(*value);
          }
 
          Object(const Type *value, SIZE_T size)
-            : allocation(AllocatorInstance.null())
-            , Base(value, size)
+            : Base()
+            , allocation(AllocatorInstance.null())
          {
+            this->allocation.allocate<Type>(size);
+            this->assign(value, size);
+            
+            /* we assume that if you're passing a pointer with a size, it's been constructed. */
+            this->built = true;
          }
 
          ~Object(void)
@@ -362,23 +380,67 @@ namespace Neurology
                return;
 
             /* this allocation is the allocator's last binding. prepare to die. */
-            if (AllocatorInstance.bindCount(this->allocation.address()) == 1)
+            if (this->built && AllocatorInstance.bindCount(this->allocation.address()) == 1)
                this->destruct();
 
             this->allocation.deallocate();
          }
 
-         virtual void operator=(Object &object)
+         /* I dunno why but C++ wants to point at Neurology::Object when returning these types... probably some kind of
+            scoping issue where it doesn't look to the internal class lol */
+         template <class ... Args> static Allocator::Object<Type, PointerHint, AllocatorInstance> New(Args... args)
+         {
+            Allocator::Object<Type, PointerHint, AllocatorInstance> newObject;
+            newObject.construct(args...);
+            return newObject;
+         }
+         
+         template <SIZE_T AllocationSize, class ... Args> static Allocator::Object<Type, PointerHint, AllocatorInstance> New(Args... args)
+         {
+            Allocator::Object<Type, PointerHint, AllocatorInstance> newObject(AllocationSize);
+            newObject.construct(args...);
+            return newObject;
+         }
+
+         void operator=(Object &object)
          {
             this->allocation.copy(object.allocation);
+            this->built = object.built;
          }
 
-         virtual void operator=(const Object *object)
+         void operator=(const Object *object)
          {
             this->allocation.clone(object->allocation);
+            this->built = object->built;
          }
 
-         virtual void assign(const Type *pointer)
+         void operator=(const Type &value)
+         {
+            if (!this->built)
+            {
+               if (!this->allocation.isValid())
+                  this->allocation.allocate<Type>();
+               
+               this->construct(value);
+            }
+            else
+               this->reassign(value);
+         }
+
+         void operator=(const Type *value)
+         {
+            if (!this->built)
+            {
+               if (!this->allocation.isValid())
+                  this->allocation.allocate<Type>();
+               
+               this->construct(*value);
+            }
+            else
+               this->reassign(*value);
+         }
+
+         void assign(const Type *pointer)
          {
             if (this->allocation.isValid())
                Base::assign(pointer, this->allocation.getSize());
@@ -390,8 +452,8 @@ namespace Neurology
                   Base::assign(pointer, PointerHint);
             }
          }
-
-         virtual void assign(const LPVOID pointer, SIZE_T size)
+         
+         void assign(const LPVOID pointer, SIZE_T size)
          {
             this->allocation.throwIfInvalid();
             
@@ -399,7 +461,6 @@ namespace Neurology
                throw Allocation::InsufficientSizeException(this->allocation, size);
 
             this->allocation.write(pointer, size);
-            this->built = true;
          }
 
          virtual void reassign(const Type *pointer)
@@ -488,7 +549,7 @@ namespace Neurology
       virtual void unpool(LPVOID address);
       
       virtual Allocation &find(const LPVOID address);
-      virtual Allocation null(void);
+      virtual Allocation &null(void);
       virtual Allocation &allocate(SIZE_T size);
       
       template <class Type> Allocation &allocate(void)

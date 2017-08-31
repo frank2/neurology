@@ -79,7 +79,8 @@ Allocation::Allocation
    if (allocator == NULL)
       throw NoAllocatorException(*this);
 
-   allocator->throwIfNotPooled(pointer);
+   if (pointer != NULL)
+      allocator->throwIfNotPooled(pointer);
 
    this->allocator = allocator;
    this->pointer = pointer;
@@ -845,24 +846,25 @@ Allocator::find
    return **this->bindings[address].begin();
 }
 
-Allocation
+Allocation &
 Allocator::null
 (void)
 {
-   return Allocation(this);
+   Allocation *nullAllocation;
+
+   nullAllocation = new Allocation(this);
+   this->allocations.insert(nullAllocation);
+
+   return *nullAllocation;
 }
 
 Allocation &
 Allocator::allocate
 (SIZE_T size)
 {
-   Allocation *newAllocation;
-
-   newAllocation = new Allocation(this, this->pool(size), size);
-   this->allocations.insert(newAllocation);
-   this->bind(newAllocation, newAllocation->address());
-
-   return *newAllocation;
+   Allocation &newAllocation = this->null();
+   newAllocation.allocate(size);
+   return newAllocation;
 }
 
 void

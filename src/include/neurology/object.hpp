@@ -8,6 +8,16 @@
 
 namespace Neurology
 {
+   template<class Type, class ReturnType=Type, class IndexType=int>
+   struct has_index_op
+   {
+   public:
+      template<typename TestType, ReturnType & (TestType::*)(IndexType)> struct SFINAE {};
+      template<typename U> static char Test(SFINAE<U, &U::operator[]>*);
+      template<typename U> static int Test(...);
+      static const bool value = sizeof(Test<Type>(0)) == sizeof(char);
+   };
+   
    template <class Type>
    class Object
    {
@@ -75,6 +85,12 @@ namespace Neurology
          throw VoidObjectException(*this);
       }
 
+      Object(const Type value)
+         : built(true)
+      {
+         this->reassign(value);
+      }
+
       Object(const Type &value)
          : built(true)
       {
@@ -93,288 +109,294 @@ namespace Neurology
          this->reassign(pointer, size);
       }
       
-      Object(const Object &object)
+      Object(Object &object)
          : built(object.built)
+      {
+         *this = object;
+      }
+
+      Object(const Object *object)
+         : built(object->built)
       {
          *this = object;
       }
 
       ~Object(void)
       {
-         if (this->built)
-            this->destruct();
       }
       
-      virtual void operator=(const Object &object)
+      void operator=(Object &object)
       {
-         *this = *object;
+         throw VoidObjectException(*this);
       }
 
-      virtual void operator=(const Type &value)
+      void operator=(const Object *object)
       {
-         **this = value;
+         throw VoidObjectException(*this);
       }
 
-      virtual void operator=(const Type *pointer)
-      {
-         **this = *pointer;
-      }
-
-      virtual Type &operator*(void)
+      Type &operator*(void)
       {
          return this->resolve();
       }
 
-      virtual const Type &operator*(void) const
+      const Type &operator*(void) const
       {
          return this->resolve();
       }
+
+      Type &operator[](const int index)
+      {
+         std::static_assert(std::is_pointer<Type>::value || std::is_array<Type>::value
+                            ,"operator[] only available if the type is a pointer or an array.");
+
+         
       
-      virtual Type operator+(const Type &right)
+      Type operator+(const Type &right)
       {
          return **this + right;
       }
 
-      virtual const Type operator+(const Type &right) const
+      const Type operator+(const Type &right) const
       {
          return **this + right;
       }
 
-      virtual Type operator-(const Type &right)
+      Type operator-(const Type &right)
       {
          return **this - right;
       }
 
-      virtual const Type operator-(const Type &right) const
+      const Type operator-(const Type &right) const
       {
          return **this - right;
       }
 
-      virtual Type operator*(const Type &right)
+      Type operator*(const Type &right)
       {
          return **this * right;
       }
 
-      virtual const Type operator*(const Type &right) const
+      const Type operator*(const Type &right) const
       {
          return **this * right;
       }
 
-      virtual Type operator/(const Type &right)
+      Type operator/(const Type &right)
       {
          return **this / right;
       }
 
-      virtual const Type operator/(const Type &right) const
+      const Type operator/(const Type &right) const
       {
          return **this / right;
       }
 
-      virtual Type operator%(const Type &right)
+      Type operator%(const Type &right)
       {
          return **this % right;
       }
 
-      virtual const Type operator%(const Type &right) const
+      const Type operator%(const Type &right) const
       {
          return **this % right;
       }
 
-      virtual Type &operator++(void)
+      Type &operator++(void)
       {
          **this = **this + 1;
          return **this;
       }
 
-      virtual Type operator++(int dummy)
+      Type operator++(int dummy)
       {
          **this = **this + 1;
          return **this;
       }
 
-      virtual Type &operator--(void)
+      Type &operator--(void)
       {
          **this = **this - 1;
          return **this;
       }
 
-      virtual Type operator--(int dummy)
+      Type operator--(int dummy)
       {
          **this = **this - 1;
          return **this;
       }
 
-      virtual bool operator==(const Type &right) const
+      bool operator==(const Type &right) const
       {
          return **this == right;
       }
 
-      virtual bool operator!=(const Type &right) const
+      bool operator!=(const Type &right) const
       {
          return **this != right;
       }
 
-      virtual bool operator>(const Type &right) const
+      bool operator>(const Type &right) const
       {
          return **this > right;
       }
 
-      virtual bool operator<(const Type &right) const
+      bool operator<(const Type &right) const
       {
          return **this < right;
       }
 
-      virtual bool operator>=(const Type &right) const
+      bool operator>=(const Type &right) const
       {
          return **this >= right;
       }
 
-      virtual bool operator<=(const Type right) const
+      bool operator<=(const Type right) const
       {
          return **this <= right;
       }
 
-      virtual bool operator!(void) const
+      bool operator!(void) const
       {
          return !**this;
       }
 
-      virtual bool operator&&(const Type &right) const
+      bool operator&&(const Type &right) const
       {
          return **this && right;
       }
 
-      virtual bool operator||(const Type right) const
+      bool operator||(const Type right) const
       {
          return **this || right;
       }
 
-      virtual Type operator~(void)
+      Type operator~(void)
       {
          return ~**this;
       }
 
-      virtual const Type operator~(void) const
+      const Type operator~(void) const
       {
          return ~**this;
       }
 
-      virtual Type operator&(const Type &right)
+      Type operator&(const Type &right)
       {
          return **this & right;
       }
 
-      virtual const Type operator&(const Type &right) const
+      const Type operator&(const Type &right) const
       {
          return **this & right;
       }
 
-      virtual Type operator|(const Type &right)
+      Type operator|(const Type &right)
       {
          return **this | right;
       }
 
-      virtual const Type operator|(const Type &right) const
+      const Type operator|(const Type &right) const
       {
          return **this | right;
       }
 
-      virtual Type operator^(const Type &right)
+      Type operator^(const Type &right)
       {
          return **this ^ right;
       }
 
-      virtual const Type operator^(const Type &right) const
+      const Type operator^(const Type &right) const
       {
          return **this ^ right;
       }
 
-      virtual Type operator<<(const Type &right)
+      Type operator<<(const Type &right)
       {
          return **this << right;
       }
 
-      virtual const Type operator<<(const Type &right) const
+      const Type operator<<(const Type &right) const
       {
          return **this << right;
       }
 
-      virtual Type operator>>(const Type &right)
+      Type operator>>(const Type &right)
       {
          return **this >> right;
       }
 
-      virtual const Type operator>>(const Type &right) const
+      const Type operator>>(const Type &right) const
       {
          return **this >> right;
       }
 
-      virtual Type &operator+=(const Type &right)
+      Type &operator+=(const Type &right)
       {
          **this = **this + right;
          return **this;
       }
 
-      virtual Type &operator-=(const Type &right)
+      Type &operator-=(const Type &right)
       {
          **this = **this - right;
          return **this;
       }
 
-      virtual Type &operator*=(const Type &right)
+      Type &operator*=(const Type &right)
       {
          **this = **this * right;
          return **this;
       }
 
-      virtual Type &operator/=(const Type &right)
+      Type &operator/=(const Type &right)
       {
          **this = **this / right;
          return **this;
       }
 
-      virtual Type &operator%=(const Type &right)
+      Type &operator%=(const Type &right)
       {
          **this = **this % right;
          return **this;
       }
 
-      virtual Type &operator&=(const Type &right)
+      Type &operator&=(const Type &right)
       {
          **this = **this & right;
          return **this;
       }
 
-      virtual Type &operator|=(const Type &right)
+      Type &operator|=(const Type &right)
       {
          **this = **this | right;
          return **this;
       }
 
-      virtual Type &operator^=(const Type &right)
+      Type &operator^=(const Type &right)
       {
          **this = **this ^ right;
          return **this;
       }
 
-      virtual Type &operator<<=(const Type &right)
+      Type &operator<<=(const Type &right)
       {
          **this = **this << right;
          return **this;
       }
 
-      virtual Type &operator>>=(const Type &right)
+      Type &operator>>=(const Type &right)
       {
          **this = **this >> right;
          return **this;
       }
 
-      virtual Type *operator->(void)
+      Type *operator->(void)
       {
          return this->pointer();
       }
 
-      virtual const Type *operator->(void) const
+      const Type *operator->(void) const
       {
          return this->pointer();
       }
