@@ -99,6 +99,9 @@
     <ClInclude Include="..\..\src\include\neurology\allocators\heap.hpp">
       <Filter>Header Files\neurology\allocators</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\src\include\neurology\address.hpp">
+      <Filter>Header Files\neurology</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\lib\exception.cpp">
@@ -139,6 +142,9 @@
     </ClCompile>
     <ClCompile Include="..\..\src\lib\win32\security.cpp">
       <Filter>Source Files\win32</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\lib\address.cpp">
+      <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

@@ -146,6 +146,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\src\include\neurology.hpp" />
+    <ClInclude Include="..\..\src\include\neurology\address.hpp" />
     <ClInclude Include="..\..\src\include\neurology\allocators.hpp" />
     <ClInclude Include="..\..\src\include\neurology\allocators\allocator.hpp" />
     <ClInclude Include="..\..\src\include\neurology\allocators\heap.hpp" />
@@ -165,6 +166,7 @@
     <ClInclude Include="..\..\src\include\neurology\win32\security.hpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\src\lib\address.cpp" />
     <ClCompile Include="..\..\src\lib\allocators\allocator.cpp" />
     <ClCompile Include="..\..\src\lib\allocators\heap.cpp" />
     <ClCompile Include="..\..\src\lib\configuration.cpp" />
