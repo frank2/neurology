@@ -4,6 +4,21 @@ using namespace Neurology;
 
 AddressPool AddressPool::Instance;
 
+NTSTATUS
+Neurology::CopyData
+(LPVOID destination, const LPVOID source, SIZE_T size)
+{
+   __try
+   {
+      CopyMemory(destination, source, size);
+      return STATUS_SUCCESS;
+   }
+   __except (EXCEPTION_EXECUTE_HANDLER)
+   {
+      return GetExceptionCode();
+   }
+}
+
 AddressPool::AddressPool
 (void)
 {
@@ -14,6 +29,8 @@ AddressPool::~AddressPool
 {
    PointerMap::iterator bindingIter;
    LabelMap::iterator labelIter;
+   std::set<Address *>::iterator addressIter;
+   std::set<Pointer>::iterator pointerIter;
    
    /* unbind all addresses from their corresponding pointers */
 
@@ -32,14 +49,23 @@ AddressPool::~AddressPool
       std::set<Pointer>::iterator pointerIter = labelIter->second.begin();
       this->releasePointer(*pointerIter);
    }
+
+   /* why are there still addresses? delete them, they're now irrelevant. */
+   while ((addressIter = this->addresses.begin()) != this->addresses.end())
+      delete *addressIter;
+
+   /* why are there still pointers? delete them, this is probably some kind of
+      memory leak. */
+   while ((pointerIter = this->pointers.begin()) != this->pointers.end())
+      delete *pointerIter;
 }
 
 bool
 AddressPool::hasLabel
-(const void *pointer) const
+(const LPVOID pointer) const
 {
    return this->hasLabel(static_cast<Label>(
-                            const_cast<void *>(pointer)));
+                            const_cast<LPVOID>(pointer)));
 }
 
 bool
@@ -49,31 +75,56 @@ AddressPool::hasLabel
    return this->labels.find(label) != this->labels.end();
 }
 
+bool
+AddressPool::isAssociated
+(const Address &address)
+{
+   return this->associations.find(&address) != this->associations.end();
+}
+
+bool
+AddressPool::isBound
+(const Address &address)
+{
+   Pointer assoc;
+
+   if (!this->isAssociated(address))
+      return false;
+
+   assoc = this->associations[&address];
+
+   if (this->bindings.find(&address) == this->bindings.end())
+      return false;
+
+   return this->bindings[&address].find(assoc) != this->bindings[&address].end();
+}
+
 Address &
 AddressPool::address
-(void *pointer)
+(const LPVOID pointer)
 {
-   return this->address(static_cast<Label>(pointer));
+   return this->address(static_cast<Label>(
+                           const_cast<LPVOID>(pointer)));
 }
 
 Address &
 AddressPool::address
 (Label label)
 {
-   Pointer pointer;
-
-   if (!this->hasLabel(label))
-      return this->newAddress(label);
-
-   return this->newAddress(this->getPointer(label));
+   std::set<Pointer>::iterator pointerIter;
+   
+   if (this->hasLabel(label))
+      return this->newAddress(this->getPointer(label));
+   
+   return this->newAddress(label);
 }
 
 Address &
 AddressPool::newAddress
-(void *pointer)
-
+(const LPVOID pointer)
 {
-   return this->newAddress(static_cast<Label>(pointer));
+   return this->newAddress(static_cast<Label>(
+                              const_cast<LPVOID>(pointer)));
 }
 
 Address &
@@ -85,10 +136,10 @@ AddressPool::newAddress
 
 void
 AddressPool::move
-(const Address &address, const void *pointer)
+(const Address &address, const LPVOID pointer)
 {
    return this->move(address, static_cast<Label>(
-                        const_cast<void *>(pointer)));
+                        const_cast<LPVOID>(pointer)));
 }
    
 void
@@ -113,10 +164,10 @@ AddressPool::hasPointer
 
 Pointer
 AddressPool::getPointer
-(const void *pointer)
+(const LPVOID pointer) const
 {
    return this->getPointer(static_cast<Label>(
-                              const_cast<void *>(pointer)));
+                              const_cast<LPVOID>(pointer)));
 }
 
 Pointer
@@ -130,9 +181,10 @@ AddressPool::getPointer
 
 Pointer
 AddressPool::newPointer
-(void *pointer)
+(const LPVOID pointer)
 {
-   return this->newPointer(static_cast<Label>(pointer));
+   return this->newPointer(static_cast<Label>(
+                              const_cast<LPVOID>(pointer)));
 }
 
 Pointer
@@ -223,19 +275,21 @@ void
 AddressPool::rebind
 (Address *address, Pointer pointer)
 {
+   Pointer assoc;
    PointerMap::iterator bindingIter;
-   
-   this->throwIfNoPointer(address->pointer);
+
+   this->throwIfNotAssociated(*address);
    this->throwIfNoPointer(pointer);
 
-   bindingIter = this->bindings.find(address->pointer);
+   assoc = this->associations[address];
+   bindingIter = this->bindings.find(assoc);
 
    if (bindingIter != this->bindings.end() && bindingIter->second.find(address) != bindingIter->second.end())
    {
       bindingIter->second.erase(address);
 
       if (bindingIter->second.size() == 0)
-         this->bindings.erase(address->pointer);
+         this->bindings.erase(assoc);
    }
 
    bindingIter = this->bindings.find(pointer);
@@ -243,10 +297,7 @@ AddressPool::rebind
    if (bindingIter == this->bindings.end())
       this->bindings[pointer] = std::set<Address *>();
 
-   if (this->associations.find(address) != this->associations.end())
-      this->associations.erase(address);
-   
-   this->bindings[pointer] = address;
+   this->bindings[pointer].insert(address);
    this->associations[address] = pointer;
 }
 
@@ -254,42 +305,27 @@ void
 AddressPool::unbind
 (Address *address)
 {
-   AssocMap::iterator assocIter;
+   Pointer assoc;
    PointerMap::iterator bindIter;
    std::set<Address *>::iterator addrIter;
    Pointer pointer;
-   
-   this->throwIfNoPointer(address->pointer);
 
-   assocIter = this->associations.find(address);
+   this->throwIfNotAssociated(*address);
+   this->throwIfNotBound(*address);
 
-   if (assocIter == this->associations.end())
-      throw AddressNotAssociatedException(*this);
-
-   pointer = *assocIter;
-   bindIter = this->bindings.find(pointer);
-
-   if (bindIter == this->bindings.end())
-      throw AddressNotBoundException(*this);
-   
-   addrIter = bindIter->second.find(address);
-
-   if (addrIter == bindIter->second.end())
-      throw AddressNotBoundException(*this, address);
-
+   assoc = this->associations[address];
    this->associations.erase(address);
-   bindIter->second.erase(address);
+   this->bindings[assoc].erase(address);
 
    if (bindIter->second.size() == 0)
    {
       pointer = bindIter->first;
       
-      this->bindings.erase(pointer);
-      this->releasePointer(pointer);
+      this->bindings.erase(assoc);
+      this->releasePointer(assoc);
    }
 
-   if (this->associations.find(address) != this->associations.end())
-      this->associations.erase(address);
+   this->associations.erase(address);
 
    /* if this address is actually one of ours, destroy it. */
    if (this->addresses.find(address))
@@ -339,13 +375,14 @@ AddressPool::relabel
    /* this pointer hasn't been labeled. label it and leave. */
    if (*pointer == 0)
       return this->label(pointer, newLabel);
-   
+
+   /* find the pointer set associated with this pointer's label. if it's found,
+      find if the pointer is in the pointer set. if it is, erase it. */
    labelIter = this->labels.find(*pointer);
 
    if (labelIter != this->labels.end())
    {
-      std::set<Pointer>::iterator = pointerIter;
-
+      std::set<Pointer>::iterator pointerIter;
       pointerIter = labelIter->second.find(pointer);
       
       if (pointerIter != labelIter->second.end())
@@ -407,7 +444,7 @@ Address::Address
 }
 
 Address::Address
-(void *pointer)
+(LPVOID pointer)
    : pool(AddressPool::Instance)
 {
    Pointer newPointer;
@@ -467,7 +504,7 @@ Address::operator=
 
 void
 Address::operator=
-(const void *pointer)
+(const LPVOID pointer)
 {
    this->move(pointer);
 }
@@ -486,27 +523,27 @@ Address::label
    return *this->getAssociation();
 }
 
-void *
+LPVOID 
 Address::address
 (void)
 {
-   return static_cast<void *>(*this->getAssociation());
+   return static_cast<LPVOID>(*this->getAssociation());
 }
 
-const void *
+const LPVOID 
 Address::address
 (void) const
 {
-   return const_cast<const void *>(
-      static_cast<void *>(*this->getAssociation()));
+   return const_cast<const LPVOID>(
+      static_cast<LPVOID>(*this->getAssociation()));
 }
 
 void
 Address::move
-(const void *pointer)
+(const LPVOID pointer)
 {
    this->move(static_cast<Label>(
-                 const_cast<void *>(pointer)));
+                 const_cast<LPVOID>(pointer)));
 }
 
 void
@@ -520,10 +557,10 @@ Address::move
 
 void
 Address::movePointer
-(const void *pointer)
+(const LPVOID pointer)
 {
    this->movePointer(static_cast<Label>(
-                        const_cast<void *>(pointer)));
+                        const_cast<LPVOID>(pointer)));
 }
 
 void
