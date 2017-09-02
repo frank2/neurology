@@ -6,18 +6,12 @@
 #include <set>
 #include <vector>
 
+#include <neurology/address.hpp>
 #include <neurology/exception.hpp>
 #include <neurology/object.hpp>
 
 namespace Neurology
 {
-   typedef std::vector<BYTE> Data;
-#define VarData(var) Data(static_cast<LPBYTE>(&(var)), static_cast<LPBYTE>((&(var))+1))
-#define PointerData(ptr) Data(static_cast<LPBYTE>(ptr), static_cast<LPBYTE>((ptr)+1))
-#define BlockData(ptr, size) Data(static_cast<LPBYTE>(ptr), static_cast<LPBYTE>(ptr)+size)
-
-   bool CopyData(LPVOID destination, const LPVOID source, SIZE_T size);
-
    class Allocator;
    
    class Allocation

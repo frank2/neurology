@@ -7,7 +7,12 @@ int
 main
 (int argc, char *argv[])
 {
-   LocalObject<int> intTest = LocalObject<int>::New(0);
-   intTest = 69; // nice
-   return *intTest;
+   int *testInt = new int;
+   Address testAddress = Address(testInt);
+
+   *testAddress.cast<int>() = 420; // nice
+
+   std::cout << *testInt << std::endl;
+
+   return 0;
 }

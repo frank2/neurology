@@ -4,21 +4,6 @@ using namespace Neurology;
 
 Allocator Allocator::Instance;
 
-bool
-Neurology::CopyData
-(LPVOID destination, const LPVOID source, SIZE_T size)
-{
-   __try
-   {
-      CopyMemory(destination, source, size);
-      return true;
-   }
-   __except (GetExceptionCode() == STATUS_ACCESS_VIOLATION)
-   {
-      return false;
-   }
-}
-
 Allocation::Exception::Exception
 (const Allocation &allocation, const LPWSTR message)
    : Neurology::Exception(message)
