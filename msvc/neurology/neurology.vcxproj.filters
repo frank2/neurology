@@ -75,9 +75,6 @@
     <ClInclude Include="..\..\src\include\neurology\configuration.hpp">
       <Filter>Header Files\neurology</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\src\include\neurology\allocators\allocator.hpp">
-      <Filter>Header Files\neurology\allocators</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\src\include\neurology\win32\handle.hpp">
       <Filter>Header Files\neurology\win32</Filter>
     </ClInclude>
@@ -92,12 +89,6 @@
     </ClInclude>
     <ClInclude Include="..\..\src\include\neurology\win32.hpp">
       <Filter>Header Files\neurology</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\src\include\neurology\object.hpp">
-      <Filter>Header Files\neurology</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\src\include\neurology\allocators\heap.hpp">
-      <Filter>Header Files\neurology\allocators</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\include\neurology\address.hpp">
       <Filter>Header Files\neurology</Filter>
@@ -127,12 +118,6 @@
     </ClCompile>
     <ClCompile Include="..\..\src\lib\configuration.cpp">
       <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\lib\allocators\allocator.cpp">
-      <Filter>Source Files\allocators</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\lib\allocators\heap.cpp">
-      <Filter>Source Files\allocators</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\lib\win32\handle.cpp">
       <Filter>Source Files\win32</Filter>

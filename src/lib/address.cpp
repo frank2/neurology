@@ -122,8 +122,7 @@ bool
 AddressPool::hasLabel
 (const LPVOID pointer) const
 {
-   return this->hasLabel(reinterpret_cast<Label>(
-                            const_cast<LPVOID>(pointer)));
+   return this->hasLabel(reinterpret_cast<Label>(pointer));
 }
 
 bool
@@ -164,8 +163,7 @@ void
 AddressPool::throwIfNoLabel
 (const LPVOID pointer) const
 {
-   return this->throwIfNoLabel(reinterpret_cast<Label>(
-                                  const_cast<LPVOID>(pointer)));
+   return this->throwIfNoLabel(reinterpret_cast<Label>(pointer));
 }
 
 void
@@ -196,8 +194,7 @@ Address
 AddressPool::address
 (const LPVOID pointer)
 {
-   return this->address(reinterpret_cast<Label>(
-                           const_cast<LPVOID>(pointer)));
+   return this->address(reinterpret_cast<Label>(pointer));
 }
 
 Address
@@ -216,8 +213,7 @@ Address
 AddressPool::newAddress
 (const LPVOID pointer)
 {
-   return this->newAddress(reinterpret_cast<Label>(
-                              const_cast<LPVOID>(pointer)));
+   return this->newAddress(reinterpret_cast<Label>(pointer));
 }
 
 Address
@@ -225,21 +221,6 @@ AddressPool::newAddress
 (Label label)
 {
    return this->newAddress(this->newIdentifier(label));
-}
-
-LPVOID
-AddressPool::getPointer
-(const Address *address)
-{
-   return reinterpret_cast<LPVOID>(this->getLabel(address));
-}
-
-const LPVOID
-AddressPool::getPointer
-(const Address *address) const
-{
-   return const_cast<const LPVOID>(
-      reinterpret_cast<LPVOID>(this->getLabel(address)));
 }
 
 Label
@@ -257,9 +238,7 @@ void
 AddressPool::move
 (const Address *address, const LPVOID pointer)
 {
-   return this->move(address
-                     ,reinterpret_cast<Label>(
-                        const_cast<LPVOID>(pointer)));
+   return this->move(address, reinterpret_cast<Label>(pointer));
 }
    
 void
@@ -311,8 +290,7 @@ Identifier
 AddressPool::getIdentifier
 (const LPVOID pointer) const
 {
-   return this->getIdentifier(reinterpret_cast<Label>(
-                                 const_cast<LPVOID>(pointer)));
+   return this->getIdentifier(reinterpret_cast<Label>(pointer));
 }
 
 Identifier
@@ -334,8 +312,7 @@ Identifier
 AddressPool::newIdentifier
 (const LPVOID pointer)
 {
-   return this->newIdentifier(reinterpret_cast<Label>(
-                                 const_cast<LPVOID>(pointer)));
+   return this->newIdentifier(reinterpret_cast<Label>(pointer));
 }
 
 Identifier
@@ -595,9 +572,17 @@ Address::NoPoolException::NoPoolException
 {
 }
 
-Address::NegativeMovementException::NegativeMovementException
-(Address &address, std::intptr_t)
-   : Address::Exception(address, EXCSTR(L"Address has no pool."))
+Address::AddressUnderflowException::AddressUnderflowException
+(Address &address, const std::intptr_t shift)
+   : Address::Exception(address, EXCSTR(L"Shift value underflowed the address."))
+   , shift(shift)
+{
+}
+
+Address::AddressOverflowException::AddressOverflowException
+(Address &address, const std::intptr_t shift)
+   : Address::Exception(address, EXCSTR(L"Shift value overflowed the address."))
+   , shift(shift)
 {
 }
 
@@ -610,12 +595,12 @@ Address::Address
 
 Address::Address
 (void)
-   : pool(&AddressPool::Instance)
+   : pool(NULL)
 {
 }
 
 Address::Address
-(LPVOID pointer)
+(const LPVOID pointer)
    : pool(&AddressPool::Instance)
 {
    Identifier newIdentifier;
@@ -659,13 +644,25 @@ void
 Address::operator=
 (const Address &address)
 {
+   if (!address.hasPool())
+   {
+      if (!this->hasPool())
+         return;
+
+      if (this->pool->isBound(this))
+         this->pool->unbind(this);
+
+      this->pool = NULL;
+      return;
+   }
+   
    address.pool->throwIfNotAssociated(&address);
-   this->pool = address.pool;
 
    if (this->pool->isBound(this))
-      this->pool->rebind(this, address.getAssociation());
-   else
-      this->pool->bind(this, address.getAssociation());
+      this->pool->unbind(this);
+
+   this->pool = address.pool;
+   this->pool->bind(this, address.getAssociation());
 }
 
 void
@@ -682,45 +679,31 @@ Address::operator=
    this->move(label);
 }
 
-LPVOID
-Address::operator*
-(void)
-{
-   return this->pointer();
-}
-
-const LPVOID
-Address::operator*
-(void) const
-{
-   return this->pointer();
-}
-
-LPVOID
-Address::operator->
-(void)
-{
-   return this->pointer();
-}
-
-const LPVOID
-Address::operator->
-(void) const
-{
-   return this->pointer();
-}
-
 Address
 Address::operator+
 (std::intptr_t shift) const
 {
-   return this->pool->address(this->label() + shift);
+   std::uintptr_t newValue = this->label() + shift;
+
+   if (shift > 0 && newValue < this->label())
+      throw AddressOverflowException(*const_cast<Address *>(this), shift);
+   else if (shift < 0 && newValue > this->label())
+      throw AddressUnderflowException(*const_cast<Address *>(this), shift);
+   
+   return this->pool->address(newValue);
 }
 
 Address
 Address::operator-
 (std::intptr_t shift) const
 {
+   std::uintptr_t newValue = this->label() - shift;
+
+   if (shift > 0 && newValue > this->label())
+      throw AddressUnderflowException(*const_cast<Address *>(this), shift);
+   else if (shift < 0 && newValue < this->label())
+      throw AddressOverflowException(*const_cast<Address *>(this), shift);
+   
    return this->pool->address(this->label() - shift);
 }
 
@@ -735,7 +718,15 @@ Address &
 Address::operator+=
 (std::intptr_t shift)
 {
-   this->move(this->label() + shift);
+   std::uintptr_t newValue = this->label() + shift;
+
+   if (shift > 0 && newValue < this->label())
+      throw AddressOverflowException(*const_cast<Address *>(this), shift);
+   else if (shift < 0 && newValue > this->label())
+      throw AddressUnderflowException(*const_cast<Address *>(this), shift);
+
+   this->move(newValue);
+   
    return *this;
 }
 
@@ -743,12 +734,14 @@ Address &
 Address::operator-=
 (std::intptr_t shift)
 {
-   std::intptr_t result = this->label() - shift;
+   std::uintptr_t newValue = this->label() - shift;
 
-   if (result < 0)
-      throw NegativeMovementException(*this, shift);
-   
-   this->move(result);
+   if (shift > 0 && newValue > this->label())
+      throw AddressUnderflowException(*this, shift);
+   else if (shift < 0 && newValue < this->label())
+      throw AddressOverflowException(*this, shift);
+
+   this->move(newValue);
    return *this;
 }
 
@@ -759,6 +752,13 @@ Address::hasPool
    return this->pool != NULL;
 }
 
+bool
+Address::isNull
+(void) const
+{
+   return !this->hasPool() || !this->pool->isAssociated(this);
+}
+
 void
 Address::throwIfNoPool
 (void) const
@@ -767,6 +767,48 @@ Address::throwIfNoPool
       throw NoPoolException(*const_cast<Address *>(this));
 }
 
+AddressPool *
+Address::getPool
+(void)
+{
+   return this->pool;
+}
+
+const AddressPool *
+Address::getPool
+(void) const
+{
+   return this->pool;
+}
+
+void
+Address::setPool
+(AddressPool *pool)
+{
+   Label label;
+   
+   if (this->hasPool() && this->pool->isBound(this))
+   {
+      label = this->label();
+      this->pool->unbind(this);
+   }
+   else
+      label = 0;
+
+   this->pool = pool;
+
+   if (pool == NULL)
+      return;
+
+   if (label != 0)
+   {
+      if (pool->hasLabel(label))
+         pool->bind(this, pool->getIdentifier(label));
+      else
+         pool->bind(this, pool->newIdentifier(label));
+   }
+}         
+
 Label
 Address::label
 (void) const
@@ -774,27 +816,11 @@ Address::label
    return *this->getAssociation();
 }
 
-LPVOID 
-Address::pointer
-(void)
-{
-   return reinterpret_cast<LPVOID>(this->label());
-}
-
-const LPVOID 
-Address::pointer
-(void) const
-{
-   return const_cast<const LPVOID>(
-      reinterpret_cast<LPVOID>(this->label()));
-}
-
 void
 Address::move
 (const LPVOID pointer)
 {
-   this->move(reinterpret_cast<Label>(
-                 const_cast<LPVOID>(pointer)));
+   this->move(reinterpret_cast<Label>(pointer));
 }
 
 void
@@ -810,8 +836,7 @@ void
 Address::moveIdentifier
 (const LPVOID pointer)
 {
-   this->moveIdentifier(reinterpret_cast<Label>(
-                           const_cast<LPVOID>(pointer)));
+   this->moveIdentifier(reinterpret_cast<Label>(pointer));
 }
 
 void

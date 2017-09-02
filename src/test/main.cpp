@@ -9,8 +9,10 @@ main
 {
    int *testInt = new int;
    Address testAddress = Address(testInt);
+   int *otherInt = static_cast<int *>(
+      reinterpret_cast<LPVOID>(testAddress.label()));
 
-   *testAddress.cast<int>() = 420; // nice
+   *otherInt = 420; // nice
 
    std::cout << *testInt << std::endl;
 

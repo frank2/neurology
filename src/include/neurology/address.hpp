@@ -41,10 +41,12 @@ namespace Neurology
       if we have the tools to make it kind of safe, why not use them?
    */
    class Address;
-   
+
    class AddressPool
    {
-      friend Address;
+      std::static_assert(std::is_same<AddressType, Address>::value || std::is_base_of<AddressType, Address>::value
+                         ,"AddressType must derive an Address object");
+      friend AddressType;
 
    public:
       class Exception : public Neurology::Exception
@@ -155,8 +157,6 @@ namespace Neurology
       Address newAddress(const LPVOID pointer);
       Address newAddress(Label label);
 
-      LPVOID getPointer(const Address *address);
-      const LPVOID getPointer(const Address *address) const;
       Label getLabel(const Address *address) const;
 
       void move(const Address *address, const LPVOID pointer);
@@ -205,12 +205,20 @@ namespace Neurology
          NoPoolException(Address &address);
       };
 
-      class NegativeMovementException : public Exception
+      class AddressUnderflowException : public Exception
       {
       public:
-         std::intptr_t shift;
+         const std::intptr_t shift;
 
-         NegativeMovementException(Address &address, std::intptr_t shift);
+         AddressUnderflowException(Address &address, const std::intptr_t shift);
+      };
+
+      class AddressOverflowException : public Exception
+      {
+      public:
+         const std::intptr_t shift;
+
+         AddressOverflowException(Address &address, const std::intptr_t shift);
       };
       
    protected:
@@ -229,10 +237,6 @@ namespace Neurology
       void operator=(const Address &address);
       void operator=(const LPVOID pointer);
       void operator=(Label label);
-      LPVOID operator*(void);
-      const LPVOID operator*(void) const;
-      LPVOID operator->(void);
-      const LPVOID operator->(void) const;
 
       Address operator+(std::intptr_t shift) const;
       Address operator-(std::intptr_t shift) const;
@@ -241,25 +245,15 @@ namespace Neurology
       Address &operator-=(std::intptr_t shift);
 
       bool hasPool(void) const;
+      bool isNull(void) const;
 
       void throwIfNoPool(void) const;
+
+      AddressPool *getPool(void);
+      const AddressPool *getPool(void) const;
+      void setPool(AddressPool *pool);
       
       Label label(void) const;
-      LPVOID pointer(void);
-      const LPVOID pointer(void) const;
-      
-      template <class Type> Type *cast(void)
-      {
-         return static_cast<Type *>(this->pointer());
-      }
-      
-      template <class Type> const Type *cast(void) const
-      {
-         return const_cast<const Type *>(
-            static_cast<Type *>(
-               const_cast<LPVOID>(this->pointer())));
-      }
-      
       void move(const LPVOID pointer);
       void move(Label newLabel);
       void moveIdentifier(const LPVOID pointer);
