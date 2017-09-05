@@ -9,17 +9,104 @@
 
 #include <neurology/exception.hpp>
 
-#define BlockData(ptr, size) Neurology::Data(static_cast<LPBYTE>(ptr), static_cast<LPBYTE>(ptr)+(size))
-#define PointerData(ptr) BlockData(ptr, sizeof(*ptr))
-#define VarData(var) PointerData(&var)
+/* FIXME this doesn't belong here, but I feel like it will be useful later and
+   just don't know where to put it right now. */
+#ifdef REG_DWORD == REG_DWORD_LITTLE_ENDIAN
+struct Register
+{
+   union
+   {
+      struct
+      {
+         std::uint64_t value;
+      } qword;
+      struct
+      {
+         union
+         {
+            std::uint32_t lowDword;
+            std::uint32_t value;
+         };
+         std::uint32_t highDword;
+      } dword;
+      struct
+      {
+         union
+         {
+            std::uint16_t lowWord;
+            std::uint16_t value;
+         };
+         std::uint16_t highWord, middleWord, upperWord;
+      } word;
+      struct
+      {
+         union
+         {
+            struct
+            {
+               std::uint8_t value;
+               std::uint8_t __padding[7];
+            };
+            std::uint8_t bytes[8];
+         };
+      } byte;
+   };
+
+   Register(void) { this->qword.value = 0; }
+   Register(std::uint64_t value) { this->qword.value = value; }
+   operator std::uint64_t(void) const { return this->qword.value; }
+};
+#else
+struct Register
+{
+   union
+   {
+      struct
+      {
+         std::uint64_t value;
+      } qword;
+      struct
+      {
+         std::uint32_t highDword;
+         union
+         {
+            std::uint32_t lowDword;
+            std::uint32_t value;
+         };
+      } dword;
+      struct
+      {
+         std::uint16_t upperWord, middleWord, highWord;
+         union
+         {
+            std::uint16_t lowWord;
+            std::uint16_t value;
+         };
+      } word;
+      struct
+      {
+         union
+         {
+            std::uint8_t bytes[8];
+            struct
+            {
+               std::uint8_t __padding[7];
+               std::uint8_t value;
+            };
+         };
+      } byte;
+   };
+
+   Register(void) { this->qword.value = 0; }
+   Register(std::uint64_t value) { this->qword.value = value; }
+   operator std::uint64_t(void) const { return this->qword.value; }
+};
+#endif
 
 namespace Neurology
 {
-   typedef std::vector<BYTE> Data;
    typedef std::uintptr_t Label;
    typedef Label *Identifier;
-
-   LONG CopyData(LPVOID destination, const LPVOID source, SIZE_T size);
 
    /* my apologies for a completely pointer-hostile address object system. 
       the code is designed the way it is for a specific reason. it's intentionally
@@ -44,9 +131,7 @@ namespace Neurology
 
    class AddressPool
    {
-      std::static_assert(std::is_same<AddressType, Address>::value || std::is_base_of<AddressType, Address>::value
-                         ,"AddressType must derive an Address object");
-      friend AddressType;
+      friend Address;
 
    public:
       class Exception : public Neurology::Exception
@@ -133,6 +218,7 @@ namespace Neurology
       static AddressPool Instance;
 
    protected:
+      Label minLabel, maxLabel;
       std::set<Identifier> identities;
       LabelMap labels;
       BindingMap bindings;
@@ -140,18 +226,33 @@ namespace Neurology
 
    public:
       AddressPool(void);
+      AddressPool(Label minLabel, Label maxLabel);
+      AddressPool(AddressPool &pool);
       ~AddressPool(void);
+
+      void drain(AddressPool &targetPool);
+      std::set<Address> pool(void);
 
       bool hasLabel(const LPVOID pointer) const;
       bool hasLabel(Label label) const;
       bool isAssociated(const Address *address) const;
       bool isBound(const Address *address) const;
+      bool inRange(Label label) const;
 
       void throwIfNoLabel(const LPVOID pointer) const;
       void throwIfNoLabel(Label label) const;
       void throwIfNotAssociated(const Address *address) const;
       void throwIfNotBound(const Address *address) const;
+      void throwIfNotInRange(Label label) const;
 
+      Label min(void) const;
+      Label max(void) const;
+      std::pair<Label, Label> range(void) const;
+      void setMin(Label label);
+      void setMax(Label label);
+      void setRange(std::pair<Label, Label> range);
+      SIZE_T size(void) const;
+      
       Address address(const LPVOID pointer);
       Address address(Label label);
       Address newAddress(const LPVOID pointer);
@@ -162,6 +263,8 @@ namespace Neurology
       void move(const Address *address, const LPVOID pointer);
       void move(const Address *address, Label label);
       void move(Label priorLabel, Label newLabel);
+      void shift(std::intptr_t shift);
+      void rebase(Label newBase);
 
    protected:
       bool hasIdentifier(const Identifier pointer) const;
@@ -234,9 +337,16 @@ namespace Neurology
       Address(const Address &address);
       ~Address(void);
 
+      operator Label(void) const;
+
       void operator=(const Address &address);
-      void operator=(const LPVOID pointer);
-      void operator=(Label label);
+
+      bool operator<(const Address &address);
+      bool operator>(const Address &address);
+      bool operator==(const Address &address);
+      bool operator!=(const Address &address);
+      bool operator<=(const Address &address);
+      bool operator>=(const Address &address);
 
       Address operator+(std::intptr_t shift) const;
       Address operator-(std::intptr_t shift) const;
@@ -258,6 +368,8 @@ namespace Neurology
       void move(Label newLabel);
       void moveIdentifier(const LPVOID pointer);
       void moveIdentifier(Label label);
+
+      Address copy(void) const;
 
    protected:
       const Identifier getAssociation(void) const;

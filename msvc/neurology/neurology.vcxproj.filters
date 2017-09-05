@@ -93,6 +93,9 @@
     <ClInclude Include="..\..\src\include\neurology\address.hpp">
       <Filter>Header Files\neurology</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\src\include\neurology\allocators\void.hpp">
+      <Filter>Header Files\neurology\allocators</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\lib\exception.cpp">
@@ -130,6 +133,9 @@
     </ClCompile>
     <ClCompile Include="..\..\src\lib\address.cpp">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\lib\allocators\void.cpp">
+      <Filter>Source Files\allocators</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

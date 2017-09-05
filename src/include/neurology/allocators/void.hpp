@@ -10,8 +10,16 @@
 #include <neurology/exception.hpp>
 #include <neurology/object.hpp>
 
+#define BlockData(ptr, size) Neurology::Data(static_cast<LPBYTE>(ptr), static_cast<LPBYTE>(ptr)+(size))
+#define PointerData(ptr) BlockData(ptr, sizeof(*ptr))
+#define VarData(var) PointerData(&var)
+
 namespace Neurology
 {
+   typedef std::vector<BYTE> Data;
+
+   LONG CopyData(LPVOID destination, const LPVOID source, SIZE_T size);
+
    class Allocator;
    
    class Allocation
@@ -62,10 +70,10 @@ namespace Neurology
       class AddressOutOfRangeException : public Exception
       {
       public:
-         const LPVOID address;
+         const Address address;
          const SIZE_T size;
 
-         AddressOutOfRangeException(const Allocation &allocation, const LPVOID address, const SIZE_T size);
+         AddressOutOfRangeException(const Allocation &allocation, const Address address, const SIZE_T size);
       };
 
       class OffsetOutOfRangeException : public Exception
@@ -77,8 +85,7 @@ namespace Neurology
       };
 
    protected:
-      Address address;
-      SIZE_T size;
+      Allocator *allocator;
 
    private:
       Allocation(Allocator *allocator, Address &address, SIZE_T size);
@@ -92,16 +99,16 @@ namespace Neurology
 
       void operator=(Allocation &allocation);
       void operator=(const Allocation *allocation);
-      LPVOID operator*(void);
-      const LPVOID operator*(void) const;
+      Address operator*(void);
+      const Address operator*(void) const;
 
       bool isValid(void) const;
       bool isBound(void) const;
       bool isNull(void) const;
       bool inRange(SIZE_T offset) const;
       bool inRange(SIZE_T offset, SIZE_T size) const;
-      bool inRange(Address &address) const;
-      bool inRange(Address &address, SIZE_T size) const;
+      bool inRange(const Address &address) const;
+      bool inRange(const Address &address, SIZE_T size) const;
 
       void throwIfNoAllocator(void) const;
       void throwIfInvalid(void) const;
@@ -110,15 +117,14 @@ namespace Neurology
       void throwIfNotInRange(Address &address) const;
       void throwIfNotInRange(Address &address, SIZE_T size) const;
 
-      const Address &getAddress(void) const;
-      LPVOID pointer(void);
-      const LPVOID pointer(void) const;
-      LPVOID pointer(SIZE_T offset);
-      const LPVOID pointer(SIZE_T offset) const;
-      LPVOID start(void);
-      const LPVOID start(void) const;
-      LPVOID end(void);
-      const LPVOID end(void) const;
+      Address address(void);
+      const Address address(void) const;
+      Address address(SIZE_T offset);
+      const Address address(SIZE_T offset) const;
+      Address start(void);
+      const Address start(void) const;
+      Address end(void);
+      const Address end(void) const;
 
       SIZE_T getSize(void) const;
 
@@ -129,13 +135,10 @@ namespace Neurology
       Data read(void) const;
       Data read(SIZE_T size) const;
       Data read(SIZE_T offset, SIZE_T size) const;
-      virtual Data read(Address address, SIZE_T size) const;
+      Data read(const Address &address, SIZE_T size) const;
       void write(const Data data);
       void write(SIZE_T offset, const Data data);
-      void write(Address address, const Data data);
-      void write(const Address address, SIZE_T size);
-      void write(SIZE_T offset, const LPVOID pointer, SIZE_T size);
-      virtual void write(Address address, const LPVOID pointer, SIZE_T size);
+      void write(Address &address, const Data data);
 
       void copy(Allocation &allocation);
       void clone(const Allocation &allocation);
@@ -146,6 +149,7 @@ namespace Neurology
       friend Allocation;
       
    public:
+      /* define the Allocator exceptions */
       class Exception : public Neurology::Exception
       {
       public:
@@ -198,10 +202,10 @@ namespace Neurology
       {
       public:
          Allocation &allocation;
-         const LPVOID pointer;
+         const Address &address;
          const SIZE_T size;
 
-         BadPointerException(Allocator &allocator, Allocation &allocation, const LPVOID pointer, SIZE_T size);
+         BadPointerException(Allocator &allocator, Allocation &allocation, const Address &address, SIZE_T size);
       };
 
       class InsufficientSizeException : public Exception
@@ -212,97 +216,50 @@ namespace Neurology
          InsufficientSizeException(Allocator &allocation, const SIZE_T size);
       };
 
-      class Address : public Neurology::Address
-      {
-      protected:
-         Allocation allocation;
-
-         Address(AddressPool *pool, const Allocation &allocation);
-      };
-         
-      static Allocator Instance;
+      typedef std::map<Address, SIZE_T> MemoryPool;
+      typedef std::map<Allocation *, Address> AssociationMap;
+      typedef std::map<Address, std::set<Allocation *> > BindingMap;
+      typedef std::map<Allocation *, AddressPool> PoolMap;
       
    protected:
-      AddressPool addressPool;
-      std::map<LPVOID, SIZE_T> memoryPool;
-      std::set<Allocation *> allocations;
-      std::map<const LPVOID, std::set<Allocation *> > bindings;
+      AddressPool pooledAddresses;
+      MemoryPool pooledMemory;
+      AssociationMap associations;
+      BindingMap bindings;
+      PoolMap addressPools;
 
    public:
       Allocator(void);
       ~Allocator(void);
-
-      static Allocation &Allocate(SIZE_T size);
-      static void Deallocate(Allocation &allocation);
-
-      template <class Type, class ...Args>
-      static Object<Type> New(Args... args)
-      {
-         Object<Type> newObject;
-         newObject.construct(args...);
-         return newObject;
-      }
       
-      template <class Type, SIZE_T PointerHint, class ...Args>
-      static Object<Type, PointerHint> New(Args... args)
-      {
-         Object<Type, PointerHint> newObject;
-         newObject.construct(args...);
-         return newObject;
-      }
-      
-      bool isPooled(const LPVOID pointer) const;
+      bool isPooled(const Address &address) const;
       bool isAllocated(const Allocation &allocation) const;
       bool isBound(const Allocation &allocation) const;
+      bool hasAllocation(const Allocation &allocation) const;
 
-      void throwIfNotPooled(const LPVOID pointer) const;
+      void throwIfNotPooled(const Address &address) const;
       void throwIfNotAllocated(const Allocation &allocation) const;
       void throwIfBound(const Allocation &allocation) const;
       void throwIfNotBound(const Allocation &allocation) const;
 
-      SIZE_T bindCount(LPVOID address) const;
+      SIZE_T bindCount(const Address &address) const;
 
-      virtual LPVOID pool(SIZE_T size);
-      virtual LPVOID repool(LPVOID address, SIZE_T newSize);
-      virtual void unpool(LPVOID address);
+      virtual Address pool(SIZE_T size);
+      virtual void repool(Address &address, SIZE_T newSize);
+      virtual void unpool(Address &address);
       
-      virtual Allocation &find(const LPVOID address);
-      virtual Allocation &null(void);
-      virtual Allocation &allocate(SIZE_T size);
-      
-      template <class Type> Allocation &allocate(void)
-      {
-         return this->allocate<Type>(sizeof(Type));
-      }
-
-      template <class Type> Allocation &allocate(SIZE_T size)
-      {
-         if (size > sizeof(Type))
-            throw InsufficientSizeException(*this, size);
-
-         return this->allocate(size);
-      }
-      
+      virtual Allocation find(const Address &address);
+      virtual Allocation null(void);
+      virtual Allocation allocate(SIZE_T size);
       virtual void reallocate(Allocation &allocation, SIZE_T size);
-      template <class Type> void reallocate(Allocation &allocation)
-      {
-         if (size > sizeof(Type))
-            throw InsufficientSizeException(*this, size);
-         
-         this->reallocate(allocation, sizeof(Type));
-      }
-      
       virtual void deallocate(Allocation &allocation);
 
-      virtual Data read(const Allocation &allocation, const LPVOID address, SIZE_T size) const;
-      virtual void write(Allocation &allocation, LPVOID address, const LPVOID pointer, SIZE_T size);
+      virtual Data read(const Address &address, SIZE_T size) const;
+      virtual void write(Address &destination, const Address &source, SIZE_T size);
       
    protected:
-      void bind(Allocation *allocation, LPVOID address);
-      void rebind(Allocation *allocation, LPVOID newAddress);
+      void bind(Allocation *allocation, Address address);
+      void rebind(Allocation *allocation, Address newAddress);
       void unbind(Allocation *allocation);
    };
-
-   template <class Type, SIZE_T PointerHint=0>
-   using LocalObject = Allocator::Object<Type, PointerHint, Allocator::Instance>;
 }

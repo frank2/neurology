@@ -4,6 +4,21 @@ using namespace Neurology;
 
 Allocator Allocator::Instance;
 
+LONG
+Neurology::CopyData
+(LPVOID destination, const LPVOID source, SIZE_T size)
+{
+   __try
+   {
+      MoveMemory(destination, source, size);
+      return 0; // STATUS_SUCCESS
+   }
+   __except (EXCEPTION_EXECUTE_HANDLER)
+   {
+      return GetExceptionCode();
+   }
+}
+
 Allocation::Exception::Exception
 (const Allocation &allocation, const LPWSTR message)
    : Neurology::Exception(message)
@@ -59,31 +74,29 @@ Allocation::OffsetOutOfRangeException::OffsetOutOfRangeException
 }
 
 Allocation::Allocation
-(Allocator *allocator, LPVOID pointer, SIZE_T size)
+(Allocator *allocator, Address &address, SIZE_T size)
 {
    if (allocator == NULL)
       throw NoAllocatorException(*this);
 
-   if (pointer != NULL)
-      allocator->throwIfNotPooled(pointer);
+   if (!address.isNull())
+      allocator->addressPool->throwIfNotBound(&address);
 
    this->allocator = allocator;
-   this->pointer = pointer;
+   this->allocation = address;
    this->size = size;
 }
 
 Allocation::Allocation
 (void)
    : allocator(NULL)
-   , pointer(NULL)
    , size(0)
 {
 }
 
 Allocation::Allocation
 (Allocator *allocator)
-   : pointer(NULL)
-   , size(0)
+   : size(0)
 {
    if (allocator == NULL)
       throw NoAllocatorException(*this);
@@ -123,8 +136,9 @@ Allocation::operator=
       this->copy(allocation);
    else
    {
-      this->pointer = allocation.pointer;
+      this->allocation = allocation.address;
       this->size = allocation.size;
+      allocation.pool.drain(this->pool);
    }
 }
    
@@ -138,19 +152,19 @@ Allocation::operator=
       this->clone(*allocation);
    else
    {
-      this->pointer = allocation->pointer;
+      this->allocation = allocation->address;
       this->size = allocation->size;
    }
 }
 
-LPVOID
+Address
 Allocation::operator*
 (void)
 {
    return this->address();
 }
 
-const LPVOID
+const Address
 Allocation::operator*
 (void) const
 {
@@ -161,7 +175,7 @@ bool
 Allocation::isValid
 (void) const
 {
-   return this->allocator != NULL && this->pointer != NULL && this->size != 0 && this->allocator->isPooled(this->pointer);
+   return this->allocator != NULL && !this->allocation.isNull() && this->size != 0 && this->allocator->isPooled(this->allocation);
 }
 
 bool
@@ -175,23 +189,19 @@ bool
 Allocation::isNull
 (void) const
 {
-   return this->allocator == NULL || this->pointer == NULL || this->size == 0;
+   return this->allocator == NULL || this->allocation.isNull() || this->size == 0;
 }
 
 bool
 Allocation::inRange
 (SIZE_T offset) const
 {
-   LPVOID pointer, start, end;
+   Address check;
    
-   if (this->pointer == NULL || this->size == 0)
+   if (this->allocation.isNull() || this->size == 0)
       return false;
-   
-   pointer = static_cast<LPVOID>(static_cast<LPBYTE>(this->pointer)+offset);
-   start = this->pointer;
-   end = static_cast<LPVOID>(static_cast<LPBYTE>(start)+this->size);
-   
-   return pointer >= start && pointer <= end;
+
+   return this->inRange(this->start() + offset);
 }
 
 bool
@@ -203,28 +213,16 @@ Allocation::inRange
 
 bool
 Allocation::inRange
-(const LPVOID address) const
+(const Address &address)
 {
-   LPVOID start, end;
-
-   if (this->pointer == NULL || this->size == 0)
-      return false;
-
-   start = this->pointer;
-   end = static_cast<LPVOID>(static_cast<LPBYTE>(this->pointer)+this->size);
-   return address >= start && address <= end;
+   return address >= this->start() && address < this->end();
 }
 
 bool
 Allocation::inRange
-(const LPVOID address, SIZE_T size) const
+(const Address &address, SIZE_T size) const
 {
-   const LPVOID endAddr = const_cast<const LPVOID>(
-      static_cast<LPVOID>(
-         static_cast<LPBYTE>(
-            const_cast<LPVOID>(address))+size));
-   
-   return this->inRange(address) && this->inRange(endAddr);
+   return this->inRange(address) && this->inRange(address + size);
 }
 
 void
@@ -244,12 +242,12 @@ Allocation::throwIfInvalid
 
    if (this->allocator == NULL)
       throw NoAllocatorException(*this);
-   if (this->pointer == NULL)
+   if (this->address.isNull())
       throw DeadAllocationException(*this);
    if (this->size == 0)
       throw ZeroSizeException(*this);
 
-   this->allocator->throwIfNotPooled(this->pointer);
+   this->allocator->throwIfNotPooled(this->allocation);
 }
 
 void
@@ -282,7 +280,7 @@ Allocation::throwIfNotInRange
 
 void
 Allocation::throwIfNotInRange
-(const LPVOID address) const
+(const Address &address) const
 {
    if (!this->inRange(address))
       throw AddressOutOfRangeException(*this, address, 0);
@@ -290,27 +288,31 @@ Allocation::throwIfNotInRange
 
 void
 Allocation::throwIfNotInRange
-(const LPVOID address, SIZE_T size) const
+(const Address address, SIZE_T size) const
 {
    if (!this->inRange(address, size))
       throw AddressOutOfRangeException(*this, address, size);
 }
 
-LPVOID
+Address
 Allocation::address
 (void)
 {
-   return this->pointer;
+   this->throwIfInvalid();
+   
+   return this->pool.address(this->allocation.label());
 }
 
-const LPVOID
+const Address
 Allocation::address
 (void) const
 {
-   return const_cast<const LPVOID>(this->pointer);
+   this->throwIfInvalid();
+
+   return this->allocation.copy();
 }
 
-LPVOID
+Address
 Allocation::address
 (SIZE_T offset)
 {
@@ -319,11 +321,10 @@ Allocation::address
    if (offset > this->size)
       throw OffsetOutOfRangeException(*this, offset, 0);
    
-   return static_cast<LPVOID>(
-      static_cast<LPBYTE>(this->pointer)+offset);
+   return this->pool.address(this->allocation.label() + offset);
 }
 
-const LPVOID
+const Address
 Allocation::address
 (SIZE_T offset) const
 {
@@ -332,33 +333,31 @@ Allocation::address
    if (offset > this->size)
       throw OffsetOutOfRangeException(*this, offset, 0);
 
-   return const_cast<const LPVOID>(
-      static_cast<LPVOID>(
-         static_cast<LPBYTE>(this->pointer)+offset));
+   return this->address.copy() + offset;
 }
 
-LPVOID
+Address
 Allocation::start
 (void)
 {
    return this->address();
 }
 
-const LPVOID
+const Address
 Allocation::start
 (void) const
 {
    return this->address();
 }
 
-LPVOID
+Address
 Allocation::end
 (void)
 {
    return this->address(this->size);
 }
 
-const LPVOID
+const Address
 Allocation::end
 (void) const
 {
@@ -378,12 +377,12 @@ Allocation::allocate
 {
    this->throwIfNoAllocator();
    
-   if (this->pointer != NULL && this->allocator->isPooled(this->pointer))
+   if (this->allocation.isNull() && this->allocator->isPooled(this->allocation))
       throw DoubleAllocationException(*this);
 
-   this->pointer = this->allocator->pool(size);
+   this->allocation = this->allocator->pool(size);
    this->size = size;
-   this->allocator->bind(this, this->pointer);
+   this->allocator->bind(this, this->allocation);
 }
 
 void
@@ -394,7 +393,7 @@ Allocation::reallocate
       return this->allocate(size);
 
    /* repooling should automatically rebind this object */
-   this->pointer = this->allocator->repool(this->pointer, size);
+   this->allocation = this->allocator->repool(this->allocation, size);
    this->size = size;
 }
 
@@ -427,7 +426,7 @@ Allocation::read
 {
    try
    {
-      return this->read(static_cast<LPBYTE>(this->pointer)+offset, size);
+      return this->read(this->address(offset), size);
    }
    catch (AddressOutOfRangeException &exception)
    {
@@ -438,7 +437,7 @@ Allocation::read
 
 Data
 Allocation::read
-(const LPVOID address, SIZE_T size) const
+(const Address address, SIZE_T size) const
 {
    this->allocator->throwIfNotBound(*this);
    return this->allocator->read(*this, address, size);
@@ -468,44 +467,10 @@ Allocation::write
 
 void
 Allocation::write
-(LPVOID address, const Data data)
-{
-   /* const correctness is stupid sometimes */
-   this->write(address
-               ,const_cast<const LPVOID>(
-                  static_cast<LPVOID>(
-                     const_cast<LPBYTE>(data.data())))
-               ,data.size());
-}
-
-void
-Allocation::write
-(const LPVOID pointer, SIZE_T size)
-{
-   this->write(static_cast<SIZE_T>(0), pointer, size);
-}
-
-void
-Allocation::write
-(SIZE_T offset, const LPVOID pointer, SIZE_T size)
-{
-   try
-   {
-      this->write(this->address(offset), pointer, size);
-   }
-   catch (AddressOutOfRangeException &exception)
-   {
-      UNUSED(exception);
-      throw OffsetOutOfRangeException(*this, offset, size);
-   }
-}
-
-void
-Allocation::write
-(LPVOID address, const LPVOID pointer, SIZE_T size)
+(Address address, const Data data)
 {
    this->allocator->throwIfNotBound(*this);
-   this->allocator->write(*this, address, pointer, size);
+   this->allocator->write(*this, address, data);
 }
 
 void
@@ -517,9 +482,9 @@ Allocation::copy
    this->allocator = allocation.allocator;
 
    if (this->isBound())
-      this->allocator->rebind(this, allocation.pointer);
+      this->allocator->rebind(this, allocation.allocation);
    else
-      this->allocator->bind(this, allocation.pointer);
+      this->allocator->bind(this, allocation.allocation);
 }
 
 void
@@ -611,7 +576,7 @@ Allocator::~Allocator
 (void)
 {
    /* unbind all allocation bindings */
-   std::map<LPVOID, std::set<Allocation *> >::iterator iter = this->bindings.begin();
+   std::map<Address, std::set<Allocation *> >::iterator iter = this->bindings.begin();
 
    while (iter != this->bindings.end())
    {
@@ -666,13 +631,13 @@ bool
 Allocator::isBound
 (const Allocation &allocation) const
 {
-   LPVOID pointer;
+   Address address;
    std::map<LPVOID, std::set<Allocation *> >::const_iterator bindIter;
    std::set<Allocation *>::const_iterator refIter;
    const Allocation *ptr = &allocation;
 
-   pointer = allocation.address();
-   bindIter = this->bindings.find(pointer);
+   address = allocation.address();
+   bindIter = this->bindings.find(address);
 
    if (bindIter == this->bindings.end())
       return false;
@@ -684,9 +649,9 @@ Allocator::isBound
 
 bool
 Allocator::isPooled
-(const LPVOID pointer) const
+(const Address address) const
 {
-   return this->memoryPool.find(pointer) != this->memoryPool.end();
+   return this->memoryPool.find(const_cast<Address>(address)) != this->memoryPool.end();
 }
 
 bool
@@ -831,16 +796,11 @@ Allocator::find
    return **this->bindings[address].begin();
 }
 
-Allocation &
+Allocation
 Allocator::null
 (void)
 {
-   Allocation *nullAllocation;
-
-   nullAllocation = new Allocation(this);
-   this->allocations.insert(nullAllocation);
-
-   return *nullAllocation;
+   return Allocation(this);
 }
 
 Allocation &
@@ -875,26 +835,16 @@ Allocator::deallocate
 
 Data
 Allocator::read
-(const Allocation &allocation, const LPVOID address, SIZE_T size) const
+(const Address &address, SIZE_T size) const
 {
-   Data data(size);
-   
-   allocation.throwIfNotInRange(address, size);
-
-   if (!CopyData(data.data(), address, size))
-      throw BadPointerException(const_cast<Allocator &>(*this), const_cast<Allocation &>(allocation), address, size);
-
-   return data;
+   throw VoidAllocatorException(*this);
 }
 
 void
 Allocator::write
-(Allocation &allocation, LPVOID address, const LPVOID pointer, SIZE_T size)
+(Address &address, const Address &pointer, SIZE_T size)
 {
-   allocation.throwIfNotInRange(address, size);
-
-   if (!CopyData(address, pointer, size))
-      throw BadPointerException(*this, allocation, address, size);
+   throw VoidAllocatorException(*this);
 }
 
 void

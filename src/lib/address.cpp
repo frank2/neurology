@@ -4,21 +4,6 @@ using namespace Neurology;
 
 AddressPool AddressPool::Instance;
 
-LONG
-Neurology::CopyData
-(LPVOID destination, const LPVOID source, SIZE_T size)
-{
-   __try
-   {
-      CopyMemory(destination, source, size);
-      return 0; // STATUS_SUCCESS
-   }
-   __except (EXCEPTION_EXECUTE_HANDLER)
-   {
-      return GetExceptionCode();
-   }
-}
-
 AddressPool::Exception::Exception
 (AddressPool &pool, LPWSTR message)
    : Neurology::Exception(message)
@@ -83,7 +68,18 @@ AddressPool::NoSuchIdentifierException::NoSuchIdentifierException
 
 AddressPool::AddressPool
 (void)
+   : minLabel(0)
+   , maxLabel(std::UINTPTR_MAX)
 {
+}
+
+AddressPool::AddressPool
+(Label minLabel, Label maxLabel)
+   : minLabel(minLabel)
+   , maxLabel(maxLabel)
+{
+   if (this->minLabel > this->maxLabel)
+      throw BadRangeException(*this, minLabel, maxLabel);
 }
 
 AddressPool::~AddressPool
@@ -116,6 +112,36 @@ AddressPool::~AddressPool
       memory leak. */
    while ((identifierIter = this->identities.begin()) != this->identities.end())
       delete *identifierIter;
+}
+
+void
+AddressPool::drain
+(AddressPool &targetPool)
+{
+   targetPool.identities = this->identities;
+   targetPool.labels = this->labels;
+   targetPool.bindings = this->bindings;
+   targetPool.associations = this->associations;
+
+   for (AssociationMap::iterator iter=this->associations.begin();
+        iter!=this->associations.end();
+        ++iter)
+   {
+      iter->first->setPool(targetPool);
+   }
+}
+
+std::set<Address>
+AddressPool::pool
+(void)
+{
+   LabelMap::iterator labelIter;
+   std::set<Address> result;
+
+   for (labelIter=this->labels.begin(); labelIter!=this->labels.end(); ++labelIter)
+      result.insert(this->address(labelIter->first));
+
+   return result;
 }
 
 bool
@@ -159,6 +185,13 @@ AddressPool::isBound
    return bindingIter->second.find(assocIter->first) != bindingIter->second.end();
 }
 
+bool
+AddressPool::inRange
+(Label label) const
+{
+   return label >= this->minLabel && label <= this->maxLabel;
+}
+
 void
 AddressPool::throwIfNoLabel
 (const LPVOID pointer) const
@@ -190,6 +223,76 @@ AddressPool::throwIfNotBound
       throw AddressNotBoundException(*const_cast<AddressPool *>(this), *const_cast<Address *>(address));
 }
 
+void
+AddressPool::throwIfNotInRange
+(Label label) const
+{
+   if (!this->inRange(label))
+      throw LabelNotInRangeException(*const_cast<Address Pool *>(this), label);
+}
+
+Label
+AddressPool::min
+(void) const
+{
+   return this->minLabel;
+}
+
+Label
+AddressPool::max
+(void) const
+{
+   return this->maxLabel;
+}
+
+std::pair<Label, Label>
+AddressPool::range
+(void) const
+{
+   return std::pair<Label, Label>(this->minLabel, this->maxLabel);
+}
+
+void
+AddressPool::setMin
+(Label label)
+{
+   if (label > this->maxLabel)
+      throw BadRangeException(*this, label, this->maxLabel);
+      
+   this->minLabel = label;
+   this->unbindOutOfBounds();
+}
+
+void
+AddressPool::setMax
+(Label label)
+{
+   if (label < this->minLabel)
+      throw BadRangeException(*this, this->minLabel, label);
+
+   this->maxLabel = label;
+   this->unbindOutOfBounds();
+}
+
+void
+AddressPool::setRange
+(std::pair<Label, Label> range)
+{
+   if (range.first > range.second || range.second < range.first)
+      throw BadRangeException(*this, range.first, range.second);
+
+   this->minLabel = range.first;
+   this->maxLabel = range.second;
+   this->unbindOutOfBounds();
+}
+
+SIZE_T
+AddressPool::size
+(void) const
+{
+   return this->maxLabel - this->minLabel;
+}
+
 Address
 AddressPool::address
 (const LPVOID pointer)
@@ -202,7 +305,7 @@ AddressPool::address
 (Label label)
 {
    std::set<Identifier>::iterator identifierIter;
-   
+
    if (this->hasLabel(label))
       return this->newAddress(this->getIdentifier(label));
    
@@ -271,6 +374,47 @@ AddressPool::move
    }
 }
 
+void
+AddressPool::shift
+(std::intptr_t shift)
+{
+   std::set<Address> snapshot;
+   std::set<Address>::iterator snapIter;
+
+   snapshot = this->pool();
+
+   for (snapIter=snapshot.begin(); snapIter!=snapshot.end(); ++snapIter)
+   {
+      std::set<Identifier>::iterator identIter;
+      Label label = snapIter->label();
+
+      while ((identIter = this->labels[label].begin()) != this->labels[label].end())
+         this->relabel(*identIter, label+shift);
+   }
+}
+
+void
+AddressPool::rebase
+(Label newBase)
+{
+   SIZE_T currentSize = this->size();
+   Label newMax = newBase + currentSize;
+   std::intptr_t delta = newBase - this->minLabel;
+
+   if (newBase > newMax || newMax < newBase)
+      throw BadRangeException(*this, newBase, newMax);
+
+   /* create a temporary range that will include the new base as well as the
+      old base, allowing everything to be moved freely. */
+   this->minLabel = min(newBase, this->minLabel);
+   this->maxLabel = max(newMax, this->maxLabel);
+
+   this->shift(delta);
+
+   this->minLabel = newBase;
+   this->maxLabel = newMax;
+}
+   
 bool
 AddressPool::hasIdentifier
 (const Identifier identifier) const
@@ -297,6 +441,7 @@ Identifier
 AddressPool::getIdentifier
 (Label label) const
 {
+   this->throwIfNotInRange(label);
    this->throwIfNoLabel(label);
 
    /* douchebag C++:
@@ -320,6 +465,8 @@ AddressPool::newIdentifier
 (Label label)
 {
    Identifier newIdentifier;
+
+   this->throwIfNotInRange(label);
    
    if (this->labels.find(label) == this->labels.end())
       this->labels[label] = std::set<Identifier>();
@@ -472,6 +619,7 @@ AddressPool::identify
       throw NullIdentifierException(*this);
 
    this->throwIfNoIdentifier(identifier);
+   this->throwIfNotInRange(label);
    
    if (this->labels.find(label) == this->labels.end())
       this->labels[label] = std::set<Identifier>();
@@ -499,6 +647,7 @@ AddressPool::reidentify
       throw NullIdentifierException(*this);
 
    this->throwIfNoIdentifier(identifier);
+   this->throwIfNotInRange(newLabel);
 
    /* this identifier hasn't been labeled. label it and leave. */
    if (*identifier == 0)
@@ -640,6 +789,12 @@ Address::~Address
       this->pool->unbind(this);
 }
 
+Address::operator Label
+(void) const
+{
+   return this->label();
+}
+
 void
 Address::operator=
 (const Address &address)
@@ -665,18 +820,46 @@ Address::operator=
    this->pool->bind(this, address.getAssociation());
 }
 
-void
-Address::operator=
-(const LPVOID pointer)
+bool
+Address::operator<
+(const Address &address)
 {
-   this->move(pointer);
+   return this->label() < address.label();
 }
 
-void
-Address::operator=
-(Label label)
+bool
+Address::operator>
+(const Address &address)
 {
-   this->move(label);
+   return this->label() > address.label();
+}
+
+bool
+Address::operator==
+(const Address &address)
+{
+   return this->label() == address.label();
+}
+
+bool
+Address::operator!=
+(const Address &address)
+{
+   return this->label() != address.label();
+}
+
+bool
+Address::operator<=
+(const Address &address)
+{
+   return this->label() <= address.label();
+}
+
+bool
+Address::operator>=
+(const Address &address)
+{
+   return this->label() >= address.label();
 }
 
 Address
@@ -846,6 +1029,15 @@ Address::moveIdentifier
    this->throwIfNoPool();
 
    this->pool->reidentify(this->pool->getAssociation(this), newLabel);
+}
+
+Address
+Address::copy
+(void) const
+{
+   this->throwIfNoPool();
+
+   return this->pool->address(this->label());
 }
 
 const Identifier

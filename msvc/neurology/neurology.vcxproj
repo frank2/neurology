@@ -148,6 +148,7 @@
     <ClInclude Include="..\..\src\include\neurology.hpp" />
     <ClInclude Include="..\..\src\include\neurology\address.hpp" />
     <ClInclude Include="..\..\src\include\neurology\allocators.hpp" />
+    <ClInclude Include="..\..\src\include\neurology\allocators\void.hpp" />
     <ClInclude Include="..\..\src\include\neurology\configuration.hpp" />
     <ClInclude Include="..\..\src\include\neurology\exception.hpp" />
     <ClInclude Include="..\..\src\include\neurology\pe.hpp" />
@@ -164,6 +165,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\lib\address.cpp" />
+    <ClCompile Include="..\..\src\lib\allocators\void.cpp" />
     <ClCompile Include="..\..\src\lib\configuration.cpp" />
     <ClCompile Include="..\..\src\lib\exception.cpp" />
     <ClCompile Include="..\..\src\lib\pe\dos.cpp" />
