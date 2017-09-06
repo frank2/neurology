@@ -422,7 +422,7 @@ AddressPool::rebase
    Label newMax = newBase + currentSize;
    std::intptr_t delta = newBase - this->minLabel;
 
-   if (newBase > newMax || newMax < newBase)
+   if (newBase > newMax)
       throw BadRangeException(*this, newBase, newMax);
 
    /* create a temporary range that will include the new base as well as the
@@ -1040,6 +1040,13 @@ Address::isNull
 (void) const
 {
    return !this->hasPool() || !this->pool->isAssociated(this);
+}
+
+bool
+Address::usesPool
+(const AddressPool *pool)
+{
+   return this->pool == pool;
 }
 
 void

@@ -378,6 +378,7 @@ namespace Neurology
 
       bool hasPool(void) const;
       bool isNull(void) const;
+      bool usesPool(const AddressPool *pool) const;
 
       void throwIfNoPool(void) const;
 

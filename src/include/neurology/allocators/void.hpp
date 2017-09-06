@@ -10,7 +10,7 @@
 #include <neurology/exception.hpp>
 #include <neurology/object.hpp>
 
-#define BlockData(ptr, size) Neurology::Data(static_cast<LPBYTE>(ptr)), static_cast<LPBYTE>(ptr)+(size))
+#define BlockData(ptr, size) Neurology::Data(static_cast<LPBYTE>(ptr), static_cast<LPBYTE>(ptr)+(size))
 #define PointerData(ptr) BlockData(ptr, sizeof(*ptr))
 #define VarData(var) PointerData(&var)
 
@@ -251,9 +251,9 @@ namespace Neurology
       bool split;
       AddressPool pooledAddresses;
       MemoryPool pooledMemory;
+      AddressPoolMap addressPools;
       AssociationMap associations;
       BindingMap bindings;
-      AddressPoolMap addressPools;
 
    public:
       Allocator(void);
@@ -284,9 +284,9 @@ namespace Neurology
       SIZE_T bindCount(const Address &address) const;
       SIZE_T querySize(const Allocation &allocation) const;
 
-      virtual Address pool(SIZE_T size);
-      virtual void repool(Address &address, SIZE_T newSize);
-      virtual void unpool(Address &address);
+      Address pool(SIZE_T size);
+      void repool(Address &address, SIZE_T newSize);
+      void unpool(Address &address);
       
       virtual Allocation find(const Address &address) const;
       virtual Allocation null(void);
@@ -300,13 +300,17 @@ namespace Neurology
       void write(const Address &address, const Data data);
       
    protected:
-      void bind(Allocation *allocation, const Address &address);
-      void rebind(Allocation *allocation, const Address &newAddress);
-      void unbind(Allocation *allocation);
-
+      virtual Address poolAddress(SIZE_T size);
+      virtual Address repoolAddress(const Address &address, SIZE_T newSize);
+      virtual void unpoolAddress(Address &address);
+      
       virtual void allocate(Allocation *allocation, SIZE_T size);
       virtual void reallocate(Allocation *allocation, SIZE_T size);
       virtual void deallocate(Allocation *allocation);
+
+      void bind(Allocation *allocation, const Address &address);
+      void rebind(Allocation *allocation, const Address &newAddress);
+      void unbind(Allocation *allocation);
 
       Data splitRead(const Address &startAddress, SIZE_T size) const;
       void splitWrite(const Address &destination, const Data data);

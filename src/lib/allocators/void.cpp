@@ -865,21 +865,66 @@ Address
 Allocator::pool
 (SIZE_T size)
 {
-   throw VoidAllocatorException(*this);
+   Address address = this->poolAddress(size);
+   this->pooledMemory[address] = size;
+   this->addressPools[address] = AddressPool();
+
+   return address;
 }
 
 void
 Allocator::repool
 (Address &address, SIZE_T newSize)
 {
-   throw VoidAllocatorException(*this);
+   Address newAddress, baseAddress;
+
+   this->throwIfNotPooled(address);
+
+   newAddress = this->repoolAddress(address, newSize);
+   this->pooledMemory[newAddress] = newSize;
+
+   /* if the address is the same, nothing needs to be done. */
+   if (address == newAddress)
+   {
+      this->addressPools[address].setMax(newAddress+newSize);
+      return;
+   }
+
+   /* otherwise, we're on clean-up duty. */
+   this->addressPools[address].setMax(address+newSize);
+   this->addressPools[address].rebase(newAddress);
+   this->addressPools[newAddress] = this->addressPools[address];
+   this->addressPools.erase(address);
+
+   if (this->bindings.count(address) > 0)
+   {
+      /* there are bindings to fix */
+      std::set<Allocation *>::iterator allocIter;
+
+      for (allocIter = this->bindings[address].begin();
+           allocIter != this->bindings[address].end();
+           ++allocIter)
+      {
+         this->rebind(*allocIter, newAddress);
+      }
+   }
+
+   this->pooledMemory.erase(address);
+
+   if (address->usesPool(&this->pooledAddresses))
+      address.moveIdentifier(newAddress.label());
+   else
+   {
+      baseAddress = this->pooledAddress.address(address.label());
+      baseAddress.moveIdentifier(newAddress.label());
+   }
 }
 
 void
 Allocator::unpool
 (Address &address)
 {
-   throw VoidAllocatorException(*this);
+   this->throwIfNotPooled(address);
 }
 
 Allocation
