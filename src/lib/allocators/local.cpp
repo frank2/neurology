@@ -41,17 +41,26 @@ LocalAllocator::Deallocate
 }
 
 Address
-LocalAllocator::pool
+LocalAllocator::poolAddress
 (SIZE_T size)
 {
-   Address address = this->pooledAddresses.address(new BYTE[size]);
-   this->pooledMemory[address] = size;
-
-   return address;
+   return this->pooledAddresses.address(new BYTE[size]);
 }
 
-void
-LocalAllocator::repool
+Address
+LocalAllocator::repoolAddress
 (Address &address, SIZE_T newSize)
 {
+   Address newAddress;
+   
    this->throwIfNotPooled(address);
+
+   newAddress = this->pooledAddresses.address(new BYTE[size]);
+   this->writeAddress(newAddress, this->readAddress(address, this->pooledMemory[address]));
+   
+   /* delete the old address, but don't unpool it-- that'll nuke all the allocations */
+   if (newAddress != address)
+      delete[] reinterpret_cast<LPBYTE>(address.label());
+
+   return newAddress;
+}

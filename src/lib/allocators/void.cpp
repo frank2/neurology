@@ -872,7 +872,7 @@ Allocator::pool
    return address;
 }
 
-void
+Address
 Allocator::repool
 (Address &address, SIZE_T newSize)
 {
@@ -886,13 +886,13 @@ Allocator::repool
    /* if the address is the same, nothing needs to be done. */
    if (address == newAddress)
    {
-      this->addressPools[address].setMax(newAddress+newSize);
-      return;
+      this->addressPools[address].setMax((newAddress+newSize).label());
+      return address;
    }
 
    /* otherwise, we're on clean-up duty. */
-   this->addressPools[address].setMax(address+newSize);
-   this->addressPools[address].rebase(newAddress);
+   this->addressPools[address].rebase(newAddress.label());
+   this->addressPools[address].setMax((address+newSize).label());
    this->addressPools[newAddress] = this->addressPools[address];
    this->addressPools.erase(address);
 
@@ -911,13 +911,15 @@ Allocator::repool
 
    this->pooledMemory.erase(address);
 
-   if (address->usesPool(&this->pooledAddresses))
+   if (address.usesPool(&this->pooledAddresses))
       address.moveIdentifier(newAddress.label());
    else
    {
-      baseAddress = this->pooledAddress.address(address.label());
+      baseAddress = this->pooledAddresses.address(address.label());
       baseAddress.moveIdentifier(newAddress.label());
    }
+
+   return newaAddress;
 }
 
 void
@@ -925,6 +927,14 @@ Allocator::unpool
 (Address &address)
 {
    this->throwIfNotPooled(address);
+
+   while (this->bindings.count(address) > 0)
+      this->unbind(*this->bindings[address].begin());
+   
+   if (this->addressPools.count(address) > 0)
+      this->addressPools.erase(address);
+   
+   this->unpoolAddress(address);
 }
 
 Allocation
@@ -1115,7 +1125,8 @@ void
 Allocator::reallocate
 (Allocation *allocation, SIZE_T size)
 {
-   this->rebind(allocation, this->repool(allocation->address()));
+   /* repooling should automatically rebind the underlying allocations */
+   this->repool(allocation->address(), size);
 }
 
 void

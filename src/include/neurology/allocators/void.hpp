@@ -243,9 +243,9 @@ namespace Neurology
       };
 
       typedef std::map<Address, SIZE_T> MemoryPool;
+      typedef std::map<Address, AddressPool> AddressPoolMap;
       typedef std::map<Allocation *, Address> AssociationMap;
       typedef std::map<Address, std::set<Allocation *> > BindingMap;
-      typedef std::map<Address, AddressPool> AddressPoolMap;
       
    protected:
       bool split;
@@ -285,7 +285,7 @@ namespace Neurology
       SIZE_T querySize(const Allocation &allocation) const;
 
       Address pool(SIZE_T size);
-      void repool(Address &address, SIZE_T newSize);
+      Address repool(Address &address, SIZE_T newSize);
       void unpool(Address &address);
       
       virtual Allocation find(const Address &address) const;
@@ -293,7 +293,35 @@ namespace Neurology
       virtual Allocation null(void) const;
       
       Allocation allocate(SIZE_T size);
+      
+      template <class Type> Allocation allocate(void)
+      {
+         return this->allocate(sizeof(Type));
+      }
+
+      template <class Type> Allocation allocate(SIZE_T size)
+      {
+         if (sizeof(Type) > size)
+            throw InsufficientSizeException(*this, size);
+
+         return this->allocate(size);
+      }
+         
       void reallocate(const Allocation &allocation, SIZE_T size);
+
+      template <class Type> void reallocate(const Allocation &allocation)
+      {
+         this->reallocate(allocation, sizeof(Type));
+      }
+
+      template <class Type> Allocation reallocate(const Allocation &allocation, SIZE_T size)
+      {
+         if (sizeof(Type) > size)
+            throw InsufficientSizeException(*this, size);
+
+         return this->reallocate(allocation, size);
+      }
+      
       void deallocate(Allocation &allocation);
 
       Data read(const Address &address, SIZE_T size) const;

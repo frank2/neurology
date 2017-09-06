@@ -35,9 +35,9 @@ namespace Neurology
       static Allocation Allocate(SIZE_T size);
       static void Deallocate(Allocation &allocation);
 
-      virtual Address pool(SIZE_T size);
-      virtual void repool(Address &address, SIZE_T newSize);
-      virtual void unpool(Address &address);
+      virtual Address poolAddress(SIZE_T size);
+      virtual void repoolAddress(Address &address, SIZE_T newSize);
+      virtual void unpoolAddress(Address &address);
 
       virtual Data readAddress(const Address &address, SIZE_T size);
       virtual void writeAddress(const Address &destination, const Data data);
