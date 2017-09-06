@@ -4,21 +4,6 @@ using namespace Neurology;
 
 Allocator Allocator::Instance;
 
-LONG
-Neurology::CopyData
-(LPVOID destination, const LPVOID source, SIZE_T size)
-{
-   __try
-   {
-      MoveMemory(destination, source, size);
-      return 0; // STATUS_SUCCESS
-   }
-   __except (EXCEPTION_EXECUTE_HANDLER)
-   {
-      return GetExceptionCode();
-   }
-}
-
 Allocation::Exception::Exception
 (const Allocation &allocation, const LPWSTR message)
    : Neurology::Exception(message)
@@ -58,7 +43,7 @@ Allocation::InsufficientSizeException::InsufficientSizeException
 }
 
 Allocation::AddressOutOfRangeException::AddressOutOfRangeException
-(const Allocation &allocation, const LPVOID address, const SIZE_T size)
+(const Allocation &allocation, const Address address, const SIZE_T size)
    : Allocation::Exception(allocation, EXCSTR(L"Provided address and size are out of range of the allocation."))
    , address(address)
    , size(size)
@@ -80,23 +65,19 @@ Allocation::Allocation
       throw NoAllocatorException(*this);
 
    if (!address.isNull())
-      allocator->addressPool->throwIfNotBound(&address);
+      allocator->throwIfNotPooled(&address);
 
    this->allocator = allocator;
-   this->allocation = address;
-   this->size = size;
 }
 
 Allocation::Allocation
 (void)
    : allocator(NULL)
-   , size(0)
 {
 }
 
 Allocation::Allocation
 (Allocator *allocator)
-   : size(0)
 {
    if (allocator == NULL)
       throw NoAllocatorException(*this);
@@ -124,6 +105,8 @@ Allocation::~Allocation
 
    if (this->isBound())
       this->allocator->unbind(this);
+
+   this->allocator = NULL;
 }
 
 void
@@ -135,11 +118,7 @@ Allocation::operator=
    if (allocation.isValid())
       this->copy(allocation);
    else
-   {
       this->allocation = allocation.address;
-      this->size = allocation.size;
-      allocation.pool.drain(this->pool);
-   }
 }
    
 void
@@ -151,10 +130,7 @@ Allocation::operator=
    if (allocation->isValid())
       this->clone(*allocation);
    else
-   {
       this->allocation = allocation->address;
-      this->size = allocation->size;
-   }
 }
 
 Address
@@ -172,24 +148,31 @@ Allocation::operator*
 }
 
 bool
-Allocation::isValid
+Allocation::isNull
 (void) const
 {
-   return this->allocator != NULL && !this->allocation.isNull() && this->size != 0 && this->allocator->isPooled(this->allocation);
+   return this->allocator == NULL || !this->allocator->isAssociated(*this) || this->size() == 0;
 }
 
 bool
 Allocation::isBound
 (void) const
 {
-   return this->isValid() && this->allocator->isBound(*this);
+   return !this->isNull() && this->allocator->isBound(*this);
 }
 
 bool
-Allocation::isNull
+Allocation::isValid
 (void) const
 {
-   return this->allocator == NULL || this->allocation.isNull() || this->size == 0;
+   return this->isBound() && this->allocator->isPooled(this->address());
+}
+
+bool
+Allocation::allocatedFrom
+(const Allocator *allocator) const
+{
+   return this->allocator == allocator;
 }
 
 bool
@@ -198,7 +181,7 @@ Allocation::inRange
 {
    Address check;
    
-   if (this->allocation.isNull() || this->size == 0)
+   if (this->isNull() || this->size() == 0)
       return false;
 
    return this->inRange(this->start() + offset);
@@ -208,12 +191,16 @@ bool
 Allocation::inRange
 (SIZE_T offset, SIZE_T size) const
 {
-   return this->inRange(offset) && this->inRange(offset+size);
+   /* we subtract 1 because we want to check whether or not all the content within
+      this allocation is readable/writable, which means the inRange check will fail
+      on the end of the range provided. */
+      
+   return size != 0 && this->inRange(offset) && this->inRange(offset+size-1);
 }
 
 bool
 Allocation::inRange
-(const Address &address)
+(const Address &address) const
 {
    return address >= this->start() && address < this->end();
 }
@@ -222,7 +209,7 @@ bool
 Allocation::inRange
 (const Address &address, SIZE_T size) const
 {
-   return this->inRange(address) && this->inRange(address + size);
+   return size != 0 && this->inRange(address) && this->inRange(address + size - 1);
 }
 
 void
@@ -288,7 +275,7 @@ Allocation::throwIfNotInRange
 
 void
 Allocation::throwIfNotInRange
-(const Address address, SIZE_T size) const
+(const Address &address, SIZE_T size) const
 {
    if (!this->inRange(address, size))
       throw AddressOutOfRangeException(*this, address, size);
@@ -300,7 +287,7 @@ Allocation::address
 {
    this->throwIfInvalid();
    
-   return this->pool.address(this->allocation.label());
+   return this->allocator.address(*this);
 }
 
 const Address
@@ -309,31 +296,61 @@ Allocation::address
 {
    this->throwIfInvalid();
 
-   return this->allocation.copy();
+   return this->allocator.address(*this);
 }
 
 Address
 Allocation::address
-(SIZE_T offset)
+(std::intptr_t offset)
 {
    this->throwIfInvalid();
-
-   if (offset > this->size)
-      throw OffsetOutOfRangeException(*this, offset, 0);
    
-   return this->pool.address(this->allocation.label() + offset);
+   return this->allocator.address(*this, offset)
 }
 
 const Address
 Allocation::address
-(SIZE_T offset) const
+(std::intptr_t offset) const
 {
    this->throwIfInvalid();
 
-   if (offset > this->size)
-      throw OffsetOutOfRangeException(*this, offset, 0);
+   return this->allocator.address(*this, offset);
+}
 
-   return this->address.copy() + offset;
+Address
+Allocation::newAddress
+(void)
+{
+   this->throwIfInvalid();
+   
+   return this->allocator.newAddress(*this);
+}
+
+const Address
+Allocation::newAddress
+(void) const
+{
+   this->throwIfInvalid();
+
+   return this->allocator.newAddress(*this);
+}
+
+Address
+Allocation::newAddress
+(std::intptr_t offset)
+{
+   this->throwIfInvalid();
+   
+   return this->allocator.newAddress(*this, offset)
+}
+
+const Address
+Allocation::newAddress
+(std::intptr_t offset) const
+{
+   this->throwIfInvalid();
+
+   return this->allocator.newAddress(*this, offset);
 }
 
 Address
@@ -354,21 +371,41 @@ Address
 Allocation::end
 (void)
 {
-   return this->address(this->size);
+   return this->address(this->getSize());
 }
 
 const Address
 Allocation::end
 (void) const
 {
-   return this->address(this->size);
+   return this->address(this->getSize());
+}
+
+const Address
+Allocation::baseAddress
+(void) const
+{
+   this->throwIfNotBound();
+   
+   return this->allocator->addressOf(*this);
 }
 
 SIZE_T
-Allocation::getSize
+Allocation::offset
+(const Address &address) const
+{
+   this->throwIfNotInRange(address);
+
+   return address - this->address();
+}
+
+SIZE_T
+Allocation::size
 (void) const
 {
-   return this->size;
+   this->throwIfNoAllocator();
+   
+   return this->allocator.querySize(*this);
 }
 
 void
@@ -377,12 +414,10 @@ Allocation::allocate
 {
    this->throwIfNoAllocator();
    
-   if (this->allocation.isNull() && this->allocator->isPooled(this->allocation))
+   if (this->isValid())
       throw DoubleAllocationException(*this);
 
-   this->allocation = this->allocator->pool(size);
-   this->size = size;
-   this->allocator->bind(this, this->allocation);
+   this->allocator->allocate(this, size);
 }
 
 void
@@ -393,8 +428,7 @@ Allocation::reallocate
       return this->allocate(size);
 
    /* repooling should automatically rebind this object */
-   this->allocation = this->allocator->repool(this->allocation, size);
-   this->size = size;
+   this->allocator->reallocate(this, size);
 }
 
 void
@@ -437,10 +471,15 @@ Allocation::read
 
 Data
 Allocation::read
-(const Address address, SIZE_T size) const
+(const Address &address, SIZE_T size) const
 {
-   this->allocator->throwIfNotBound(*this);
-   return this->allocator->read(*this, address, size);
+   this->throwIfNotValid();
+   this->throwIfNotInRange(address);
+   
+   if (this->allocator->willSplit(address, size))
+      return this->allocator->splitRead(address, size);
+   else
+      return this->allocator->read(this, address, size);
 }
 
 void
@@ -467,10 +506,15 @@ Allocation::write
 
 void
 Allocation::write
-(Address address, const Data data)
+(const Address &destAddress, const Data data)
 {
-   this->allocator->throwIfNotBound(*this);
-   this->allocator->write(*this, address, data);
+   this->throwIfInvalid();
+   this->throwIfNotInRange(destAddress);
+   
+   if (this->allocator->willSplit(destAddress, data.size()))
+      this->allocator->splitWrite(destAddress, data);
+   else
+      this->allocator->write(this, destAddress, data);
 }
 
 void
@@ -482,9 +526,9 @@ Allocation::copy
    this->allocator = allocation.allocator;
 
    if (this->isBound())
-      this->allocator->rebind(this, allocation.allocation);
+      this->allocator->rebind(this, allocation.baseAddress());
    else
-      this->allocator->bind(this, allocation.allocation);
+      this->allocator->bind(this, allocation.baseAddress());
 }
 
 void
@@ -493,8 +537,8 @@ Allocation::clone
 {
    allocation.throwIfInvalid();
 
-   if (this->size != allocation.size)
-      this->reallocate(allocation.size);
+   if (this->size() != allocation.size())
+      this->reallocate(allocation.size());
 
    this->write(allocation.read());
 }
@@ -551,15 +595,6 @@ Allocator::UnmanagedAllocationException::UnmanagedAllocationException
 {
 }
 
-Allocator::BadPointerException::BadPointerException
-(Allocator &allocator, Allocation &allocation, const LPVOID pointer, const SIZE_T size)
-   : Allocator::Exception(allocator, EXCSTR(L"The provided pointer threw a hardware exception."))
-   , allocation(allocation)
-   , pointer(pointer)
-   , size(size)
-{
-}
-
 Allocator::InsufficientSizeException::InsufficientSizeException
 (Allocator &allocator, const SIZE_T size)
    : Allocator::Exception(allocator, EXCSTR(L"Supplied size not large enough for supplied type."))
@@ -569,6 +604,13 @@ Allocator::InsufficientSizeException::InsufficientSizeException
 
 Allocator::Allocator
 (void)
+   : split(true)
+{
+}
+
+Allocator::Allocator
+(bool split)
+   : split(split)
 {
 }
 
@@ -576,12 +618,12 @@ Allocator::~Allocator
 (void)
 {
    /* unbind all allocation bindings */
-   std::map<Address, std::set<Allocation *> >::iterator iter = this->bindings.begin();
+   BindingMap::iterator iter = this->bindings.begin();
 
    while (iter != this->bindings.end())
    {
       if (iter->second.begin() != iter->second.end())
-         this->unbind(*iter->second.begin());
+         this->unbind(iter->second.begin());
       else
       {
          /* the binding set is empty, check if it's still pooled.
@@ -595,36 +637,49 @@ Allocator::~Allocator
       /* unbinding may have misplaced the iterator-- start over from the beginning */
       iter = this->bindings.begin();
    }
-             
-   /* if there are any allocations left, delete them */
-   for (std::set<Allocation *>::iterator iter=this->allocations.begin();
-        iter != this->allocations.end();
-        ++iter)
-   {
-      this->deallocate(**iter);
-   }
    
    /* if there are any entries left in the memory pool, delete them */
-   for (std::map<LPVOID, SIZE_T>::iterator iter=this->memoryPool.begin();
-        iter != this->memoryPool.end();
+   for (MemoryPool::iterator iter=this->pooledMemory.begin();
+        iter != this->pooledMemory.end();
         ++iter)
    {
       this->unpool(iter->first);
    }
 }
 
-Allocation &
-Allocator::Allocate
-(SIZE_T size)
+void
+Allocator::allowSplitting
+(void)
 {
-   return Allocator::Instance.allocate(size);
+   this->split = true;
 }
 
 void
-Allocator::Deallocate
-(Allocation &allocation)
+Allocator::denySplitting
+(void)
 {
-   Allocator::Instance.deallocate(allocation);
+   this->split = false;
+}
+
+bool
+Allocator::splits
+(void) const
+{
+   return this->split;
+}
+
+bool
+Allocator::isPooled
+(const Address &address) const
+{
+   return this->pooledMemory.count(const_cast<Address>(address)) > 0;
+}
+
+bool
+Allocator::isAssociated
+(const Allocation &allocation) const
+{
+   return this->associations.count(const_cast<Allocation *>(&allocation)) > 0;
 }
 
 bool
@@ -637,36 +692,54 @@ Allocator::isBound
    const Allocation *ptr = &allocation;
 
    address = allocation.address();
-   bindIter = this->bindings.find(address);
 
-   if (bindIter == this->bindings.end())
+   if (this->bindings.count(address) == 0)
       return false;
 
+   bindIter = this->bindings.find(address);
    refIter = bindIter->second.find(const_cast<Allocation *>(&allocation));
 
    return refIter != bindIter->second.end();
 }
 
 bool
-Allocator::isPooled
-(const Address address) const
+Allocator::hasAddress
+(const Address &address) const
 {
-   return this->memoryPool.find(const_cast<Address>(address)) != this->memoryPool.end();
+   return !this->find(address).isNull();
 }
 
 bool
-Allocator::isAllocated
-(const Allocation &allocation) const
+Allocator::willSplit
+(const Address &address, SIZE_T size) const;
 {
-   return this->allocations.find(const_cast<Allocation *>(&allocation)) != this->allocations.end();
-}
+   Allocation &foundAllocation = this->find(address);
+   MemoryPool::iterator poolIter;
+   Address endAddr;
 
+   /* technically false-- you won't split an allocation that doesn't exist. */
+   if (foundAllocation.isNull())
+      return false;
+
+   /* address and size are within range of the allocation, won't split */
+   if (foundAllocation.inRange(address, size))
+      return false;
+
+   /* now, find the key tied to this allocation and see if the next allocation
+      has the same start address as the prior allocation's end address. if it
+      does, it will split, we just don't know how many times. */
+   endAddr = foundAllocation.end();
+   poolIter = this->pooledMemory.upper_bound(address);
+
+   /* return the determination of whether or not this has one or more splits */
+   return poolIter != this->pooledMemory.end() && endAddr == poolIter->first;
+}
 void
 Allocator::throwIfNotPooled
-(const LPVOID pointer) const
+(const Address &address) const
 {
-   if (!this->isPooled(pointer))
-      throw UnpooledAddressException(const_cast<Allocator &>(*this), pointer);
+   if (!this->isPooled(address))
+      throw UnpooledAddressException(const_cast<Allocator &>(*this), address);
 }
 
 void
@@ -693,13 +766,102 @@ Allocator::throwIfNotBound
       throw UnboundAllocationException(const_cast<Allocator &>(*this), const_cast<Allocation &>(allocation));
 }
 
+void
+Allocator::throwIfNoAllocation
+(const Address &address) const
+{
+   if (!this->hasAddress(address))
+      throw AddressHasNoAllocationException(const_cast<Allocator>(*this), const_cast<Address>(address));
+}
+
+const Address
+Allocator::addressOf
+(const Allocation &allocation)
+{
+   this->throwIfNotBound(allocation);
+
+   return const_cast<const Address>(this->associations[&allocation]);
+}
+
+Address
+Allocator::address
+(const Allocation &allocation)
+{
+   return this->address(allocation, 0);
+}
+
+const Address
+Allocator::address
+(const Allocation &allocation) const
+{
+   return this->address(allocation, 0);
+}
+
+Address
+Allocator::address
+(const Allocation &allocation, SIZE_T offset)
+{
+   Address baseAddress;
+   
+   this->throwIfNotBound(allocation);
+   baseAddress = this->associations[const_cast<Allocation *>(&allocation)];
+   return this->addressPools[baseAddress].address(baseAddress.label() + offset);
+}
+
+const Address
+Allocator::address
+(const Allocation &allocation, SIZE_T offset) const
+{
+   Address baseAddress;
+   
+   this->throwIfNotBound(allocation);
+   baseAddress = this->associations[const_cast<Allocation *>(&allocation)];
+   return this->addressPools[baseAddress].address(baseAddress.label() + offset);
+}
+
+Address
+Allocator::newAddress
+(const Allocation &allocation)
+{
+   return this->newAddress(allocation, 0);
+}
+
+const Address
+Allocator::newAddress
+(const Allocation &allocation) const
+{
+   return this->newAddress(allocation, 0);
+}
+
+Address
+Allocator::newAddress
+(const Allocation &allocation, SIZE_T offset)
+{
+   Address baseAddress;
+   
+   this->throwIfNotBound(allocation);
+   baseAddress = this->associations[const_cast<Allocation *>(&allocation)];
+   return this->addressPools[baseAddress].newAddress(baseAddress.label() + offset);
+}
+
+const Address
+Allocator::newAddress
+(const Allocation &allocation, SIZE_T offset) const
+{
+   Address baseAddress;
+   
+   this->throwIfNotBound(allocation);
+   baseAddress = this->associations[const_cast<Allocation *>(&allocation)];
+   return this->addressPools[baseAddress].newAddress(baseAddress.label() + offset);
+}
+
 SIZE_T
 Allocator::bindCount
-(const LPVOID address) const
+(const Address &address) const
 {
    std::map<const LPVOID, std::set<Allocation *> >::const_iterator bindIter;
 
-   bindIter = this->bindings.find(address);
+   bindIter = this->bindings.find(const_cast<Address>(address));
 
    if (bindIter == this->bindings.end())
       return 0;
@@ -707,93 +869,60 @@ Allocator::bindCount
    return bindIter->second.size();
 }
 
+SIZE_T
+Allocator::querySize
+(const Allocation &allocation) const
+{
+   Address baseAddress;
+   
+   this->throwIfNotBound(allocation);
+   baseAddress = this->associations[const_cast<Allocation *>(&allocation)];
+   return this->addressPools[baseAddress].size();
+}
+
 LPVOID
 Allocator::pool
 (SIZE_T size)
 {
-   LPVOID pooledData;
-
-   if (size == 0)
-      throw ZeroSizeException(*this);
-   
-   pooledData = static_cast<LPVOID>(new BYTE[size]);
-
-   if (pooledData == NULL)
-      throw PoolAllocationException(*this);
-   
-   ZeroMemory(pooledData, size);
-   
-   this->memoryPool[pooledData] = size;
-
-   return pooledData;
+   throw VoidAllocatorException(*this);
 }
 
 LPVOID
 Allocator::repool
-(LPVOID address, SIZE_T size)
+(Address &address, SIZE_T size)
 {
-   LPVOID newPool;
-   std::map<LPVOID, std::set<Allocation *> >::iterator bindIter;
-   
-   this->throwIfNotPooled(address);
-
-   newPool = this->pool(size);
-   
-   if (!CopyData(newPool, address, min(size, this->memoryPool[address])))
-      throw BadPointerException(*this, this->null(), const_cast<const LPVOID>(address), min(size, this->memoryPool[address]));
-
-   bindIter = this->bindings.find(address);
-
-   if (bindIter != this->bindings.end())
-   {
-      std::set<Allocation *>::iterator setIter;
-
-      for (setIter = this->bindings[address].begin(); setIter != this->bindings[address].end(); ++setIter)
-         this->rebind(*setIter, newPool);
-   }
-
-   /* if the address is still pooled after having all its bindings moved, destroy it-- it is no longer relevant. */
-   if (this->isPooled(address))
-      this->unpool(address);
-
-   return newPool;
+   throw VoidAllocatorException(*this);
 }
 
 void
 Allocator::unpool
-(LPVOID address)
+(Address &address)
 {
-   std::map<const LPVOID, std::set<Allocation *> >::iterator bindIter;
-   
-   this->throwIfNotPooled(address);
-
-   bindIter = this->bindings.find(const_cast<const LPVOID>(address));
-
-   if (bindIter != this->bindings.end())
-   {
-      std::set<Allocation *>::iterator setIter;
-
-      for (setIter = this->bindings[address].begin(); setIter != this->bindings[address].end(); ++setIter)
-         this->unbind(*setIter);
-
-      /* did unbind destroy us? return if so */
-      if (!this->isPooled(address))
-         return;
-   }
-
-   ZeroMemory(address, this->memoryPool[address]);
-   delete[] static_cast<LPBYTE>(address);
-   this->memoryPool.erase(address);
+   throw VoidAllocatorException(*this);
 }
 
-Allocation &
+Allocation
 Allocator::find
-(const LPVOID address)
+(const Address address)
 {
-   if (this->bindings.find(address) == this->bindings.end())
+   BindingMap::iterator bindIter;
+   
+   if (this->bindings.count(address) > 0)
+      return **this->bindings[address].begin();
+
+   /* we didn't find a binding bound to that specific address. try another method. */
+   bindIter = this->bindings.upper_bound(address);
+
+   if (bindIter == this->bindings.begin())
       return this->null();
 
-   return **this->bindings[address].begin();
+   --bindIter;
+
+   if (bindIter->second.begin()->inRange(address))
+      return *bindIter->second.begin();
+
+   /* couldn't find it in our allocations, return a null allocation. */
+   return this->null();
 }
 
 Allocation
@@ -803,11 +932,11 @@ Allocator::null
    return Allocation(this);
 }
 
-Allocation &
+Allocation
 Allocator::allocate
 (SIZE_T size)
 {
-   Allocation &newAllocation = this->null();
+   Allocation newAllocation = this->null();
    newAllocation.allocate(size);
    return newAllocation;
 }
@@ -817,10 +946,10 @@ Allocator::reallocate
 (Allocation &allocation, SIZE_T size)
 {
    this->throwIfNotAllocated(allocation);
-   this->throwIfNotPooled(allocation.pointer);
+   this->throwIfNotPooled(allocation.baseAddress());
 
-   /* calling repool on the underlying address will rebind this allocation automatically. */
-   this->repool(allocation.pointer, size);
+   /* calling repool on the underlying address will rebind all allocations automatically. */
+   this->repool(allocation.baseAddress(), size);
 }
 
 void
@@ -828,66 +957,85 @@ Allocator::deallocate
 (Allocation &allocation)
 {
    this->throwIfNotAllocated(allocation);
-   this->throwIfNotPooled(allocation.pointer);
+   this->throwIfNotPooled(allocation.baseAddress());
 
-   this->unpool(allocation.pointer);
+   this->unpool(allocation.baseAddress());
 }
 
 Data
 Allocator::read
 (const Address &address, SIZE_T size) const
 {
-   throw VoidAllocatorException(*this);
+   this->throwIfNoAllocation(address);
+
+   if (this->willSplit(address, size))
+      return this->splitRead(address, size);
+   else
+      return this->read(this->find(address), address, size);
 }
 
 void
 Allocator::write
-(Address &address, const Address &pointer, SIZE_T size)
+(Address &address, const Data data)
 {
-   throw VoidAllocatorException(*this);
+   this->throwIfNoAllocation(address);
+
+   if (this->willSplit(address, size))
+      return this->splitWrite(address, data);
+   else
+      return this->read(this->find(address), address, data);
 }
 
 void
 Allocator::bind
-(Allocation *allocation, LPVOID address)
+(Allocation *allocation, Address address)
 {
    this->throwIfNotPooled(address);
    this->throwIfBound(*allocation);
 
-   if (this->bindings.find(address) == this->bindings.end())
+   if (this->bindings.count(address) == 0)
       this->bindings[address] = std::set<Allocation *>();
 
    this->bindings[address].insert(allocation);
    allocation->allocator = this;
-   allocation->pointer = address;
-   allocation->size = this->memoryPool[address];
+
+   if (this->addressPools.count(address) == 0)
+      this->addressPools[address] = AddressPool(address.label(), (address+this->pooledMemory[address]).label());
+
+   this->associations[allocation] = address;
 }
 
 void
 Allocator::rebind
-(Allocation *allocation, LPVOID newAddress)
+(Allocation *allocation, Address &newAddress)
 {
-   LPVOID oldAddress;
+   Address oldAddress;
    
    if (!this->isBound(*allocation))
       return this->bind(allocation, newAddress);
 
-   this->throwIfNotPooled(allocation->pointer);
+   this->throwIfNotAssociated(*allocation);
+   this->throwIfNotPooled(allocation->address());
    this->throwIfNotPooled(newAddress);
 
-   if (this->bindings.find(newAddress) == this->bindings.end())
+   if (this->bindings.count(newAddress) == 0)
       this->bindings[newAddress] = std::set<Allocation *>();
    
-   oldAddress = allocation->pointer;
+   oldAddress = this->associations[allocation];
    this->bindings[newAddress].insert(allocation);
    this->bindings[oldAddress].erase(allocation);
 
    allocation->allocator = this;
-   allocation->pointer = newAddress;
-   allocation->size = this->memoryPool[newAddress];
+   this->associations[allocation] = newAddress;
 
    if (this->bindings[oldAddress].size() == 0)
+   {
+      this->bindings.erase(oldAddress);
       this->unpool(oldAddress);
+   }
+   else
+      /* moves all identifiers in the address's binding to the new address */
+      oldAddress.moveIdentifier(newAddress.label());
 }
 
 void
@@ -902,26 +1050,204 @@ Allocator::unbind
    this->throwIfNotPooled(allocation->pointer);
 
    boundAddress = allocation->pointer;
-   
+
+   this->addressPools.erase(boundAddress);
+   this->associations.erase(allocation);
    this->bindings[boundAddress].erase(allocation);
-   bindings = this->bindings[boundAddress].size();
-
-   if (bindings == 0)
-      this->bindings.erase(boundAddress);
-
-   allocation->pointer = NULL;
-   allocation->size = 0;
-
-   /* if we're unbinding the allocation and we created the allocation object, this is where we want to
-      delete it. */
-   if (this->allocations.find(allocation) != this->allocations.end())
+   
+   if (this->bindings[boundAddress].size() == 0)
    {
-      this->allocations.erase(allocation);
-      delete allocation;
+      this->bindings.erase(boundAddress);
+      
+      if (this->isPooled(boundAddress))
+          this->unpool(boundAddress);
+   }
+}
+
+void
+Allocator::allocate
+(Allocation *allocation, SIZE_T size)
+{
+   throw VoidAllocatorException(*this);
+}
+
+void
+Allocator::reallocate
+(Allocation *allocation, SIZE_T size)
+{
+   throw VoidAllocatorException(*this);
+}
+
+void
+Allocator::deallocate
+(Allocation *allocation)
+{
+   throw VoidAllocatorException(*this);
+}
+
+Data
+Allocator::splitRead
+(const Address &startAddress, SIZE_T size)
+{
+   BindingMap::iterator bindIter;
+   Data result;
+   Address addressIter;
+   SIZE_T oldSize = size;
+   
+   this->throwIfNoAllocation(startAddress);
+
+   /* won't split, do a normal read */
+   if (!this->willSplit(startAddress, size))
+      this->read(startAddress, size);
+
+   /* find the lower bound of the address and wind it back one if it's not exact. */
+   bindIter = this->bindings.lower_bound(startAddress);
+
+   if (bindIter == this->bindings.end() || bindIter->first != startAddress)
+      --bindIter;
+
+   addressIter = startAddress;
+
+   while (bindIter != this->bindings.end())
+   {
+      Allocation *boundAlloc = bindIter->second.begin();
+      Allocation *nextAlloc;
+      Data stackData;
+      bool inRange;
+
+      inRange = boundAlloc->inRange(addressIter, size);
+
+      if (inRange)
+      {
+         stackData = this->read(boundAlloc, addressIter, size);
+         size = 0;
+      }
+      else
+      {
+         SIZE_T newSize;
+
+         newSize = boundAlloc->end() - addressIter;
+         stackData = this->read(boundAlloc, addressIter, newSize);
+         size -= newSize;
+      }
+
+      result.resize(result.size() + stackData.size());
+      MoveMemory(result.data() + result.size(), stackData.data(), stackData.size());
+
+      if (size == 0)
+         break;
+
+      ++bindIter;
+
+      if (bindIter == this->bindings.end())
+         continue;
+
+      nextAlloc = bindIter->second.begin();
+
+      /* we've reached a splitting boundary, break out */
+      if (boundAlloc->end() != nextAlloc->begin())
+         break;
+
+      addressIter = bindIter->first;
    }
 
-   /* if there are no bindings available on this address and the address is still
-      pooled for some reason, unpool it. */
-   if (bindings == 0 && this->isPooled(boundAddress))
-      this->unpool(boundAddress);
+   if (size != 0)
+      throw SplitsExceededException(*this, startAddress, oldSize);
+
+   return result;
+}
+
+Data
+Allocator::splitWrite
+(const Address &destination, const Data data)
+{
+   BindingMap::iterator bindIter;
+   Address addressIter;
+   SIZE_T size = data.size();
+   SIZE_T windowLeft, windowRight;
+   
+   this->throwIfNoAllocation(destination);
+
+   /* won't split, do a normal read */
+   if (!this->willSplit(destination, size))
+      this->write(destination, data);
+
+   /* find the lower bound of the address and wind it back one if it's not exact. */
+   bindIter = this->bindings.lower_bound(destination);
+
+   if (bindIter == this->bindings.end() || bindIter->first != destination)
+      --bindIter;
+
+   addressIter = destination;
+   windowLeft = windowRight = 0;
+
+   while (bindIter != this->bindings.end())
+   {
+      Allocation *boundAlloc = bindIter->second.begin();
+      Allocation *nextAlloc;
+      Data dataSlice;
+      bool inRange;
+
+      inRange = boundAlloc->inRange(addressIter, size);
+
+      if (inRange)
+         windowRight = size;
+      else
+         windowRight += boundAlloc->end() - addressIter;
+      
+      dataSlice = BlockData(data.data()+windowLeft, windowRight - windowLeft);
+      this->write(boundAlloc, addressIter, dataSlice);
+      windowLeft = windowRight;
+
+      if (windowLeft == data.size())
+         break;
+
+      ++bindIter;
+
+      if (bindIter == this->bindings.end())
+         continue;
+
+      nextAlloc = bindIter->second.begin();
+
+      /* we've reached a splitting boundary, break out */
+      if (boundAlloc->end() != nextAlloc->begin())
+         break;
+
+      addressIter = bindIter->first;
+   }
+
+   if (windowLeft != data.size())
+      throw SplitsExceededException(*this, startAddress, size);
+
+   return result;
+}
+
+Data
+Allocator::read
+(const Allocation *allocation, const Address &address, SIZE_T size) const
+{
+   allocation->throwIfNotInRange(address, size);
+   return this->readAddress(address, size);
+}
+
+Data
+Allocator::write
+(const Allocation *allocation, const Address &destination, const Data data) const;
+{
+   allocation->throwIfNotInRange(destination, data.size());
+   return this->writeAddress(destination, data);
+}
+
+Data
+Allocator::readAddress
+(const Address &address, SIZE_T size) const
+{
+   throw VoidAllocatorException(*this);
+}
+
+Data
+Allocator::writeAddress
+(const Address &destination, const Data data) const
+{
+   throw VoidAllocatorException(*this);
 }

@@ -18,8 +18,6 @@ namespace Neurology
 {
    typedef std::vector<BYTE> Data;
 
-   LONG CopyData(LPVOID destination, const LPVOID source, SIZE_T size);
-
    class Allocator;
    
    class Allocation
@@ -102,9 +100,10 @@ namespace Neurology
       Address operator*(void);
       const Address operator*(void) const;
 
-      bool isValid(void) const;
-      bool isBound(void) const;
       bool isNull(void) const;
+      bool isBound(void) const;
+      bool isValid(void) const;
+      bool allocatedFrom(const Allocator *allocator) const;
       bool inRange(SIZE_T offset) const;
       bool inRange(SIZE_T offset, SIZE_T size) const;
       bool inRange(const Address &address) const;
@@ -114,19 +113,25 @@ namespace Neurology
       void throwIfInvalid(void) const;
       void throwIfNotInRange(SIZE_T offset) const;
       void throwIfNotInRange(SIZE_T offset, SIZE_T size) const;
-      void throwIfNotInRange(Address &address) const;
-      void throwIfNotInRange(Address &address, SIZE_T size) const;
+      void throwIfNotInRange(const Address &address) const;
+      void throwIfNotInRange(const Address &address, SIZE_T size) const;
 
       Address address(void);
       const Address address(void) const;
       Address address(SIZE_T offset);
       const Address address(SIZE_T offset) const;
+      Address newAddress(void);
+      const Address newAddress(void) const;
+      Address newAddress(SIZE_T offset);
+      const Address newAddress(SIZE_T offset) const;
       Address start(void);
       const Address start(void) const;
       Address end(void);
       const Address end(void) const;
+      const Address baseAddress(void) const;
+      SIZE_T offset(const Address &address) const;
 
-      SIZE_T getSize(void) const;
+      SIZE_T size(void) const;
 
       void allocate(SIZE_T size);
       void reallocate(SIZE_T size);
@@ -138,7 +143,7 @@ namespace Neurology
       Data read(const Address &address, SIZE_T size) const;
       void write(const Data data);
       void write(SIZE_T offset, const Data data);
-      void write(Address &address, const Data data);
+      void write(const Address &address, const Data data);
 
       void copy(Allocation &allocation);
       void clone(const Allocation &allocation);
@@ -198,16 +203,6 @@ namespace Neurology
          UnmanagedAllocationException(Allocator &allocator, Allocation &allocation);
       };
 
-      class BadPointerException : public Exception
-      {
-      public:
-         Allocation &allocation;
-         const Address &address;
-         const SIZE_T size;
-
-         BadPointerException(Allocator &allocator, Allocation &allocation, const Address &address, SIZE_T size);
-      };
-
       class InsufficientSizeException : public Exception
       {
       public:
@@ -216,50 +211,89 @@ namespace Neurology
          InsufficientSizeException(Allocator &allocation, const SIZE_T size);
       };
 
+      class VoidAllocatorException : public Exception
+      {
+      public:
+         VoidAllocatorException(Allocator &allocator);
+      };
+
       typedef std::map<Address, SIZE_T> MemoryPool;
       typedef std::map<Allocation *, Address> AssociationMap;
       typedef std::map<Address, std::set<Allocation *> > BindingMap;
-      typedef std::map<Allocation *, AddressPool> PoolMap;
+      typedef std::map<Address, AddressPool> AddressPoolMap;
       
    protected:
+      bool split;
       AddressPool pooledAddresses;
       MemoryPool pooledMemory;
       AssociationMap associations;
       BindingMap bindings;
-      PoolMap addressPools;
+      AddressPoolMap addressPools;
 
    public:
       Allocator(void);
       ~Allocator(void);
-      
+
+      void allowSplitting(void);
+      void denySplitting(void);
+      bool splits(void) const;
+
       bool isPooled(const Address &address) const;
-      bool isAllocated(const Allocation &allocation) const;
+      bool isAssociated(const Allocation &allocation) const;
       bool isBound(const Allocation &allocation) const;
-      bool hasAllocation(const Allocation &allocation) const;
+      bool hasAddress(const Address &address) const;
+      bool willSplit(const Address &address, SIZE_T size) const;
 
       void throwIfNotPooled(const Address &address) const;
       void throwIfNotAllocated(const Allocation &allocation) const;
       void throwIfBound(const Allocation &allocation) const;
       void throwIfNotBound(const Allocation &allocation) const;
+      void throwIfNoAllocation(const Address &address) const;
 
+      const Address addressOf(const Allocation &allocation) const;
+      Address address(const Allocation &allocation);
+      const Address address(const Allocation &allocation) const;
+      Address address(const Allocation &allocation, SIZE_T offset);
+      const Address address(const Allocation &allocation, SIZE_T offset) const;
+      Address newAddress(const Allocation &allocation);
+      const Address newAddress(const Allocation &allocation) const;
+      Address newAddress(const Allocation &allocation, SIZE_T offset);
+      const Address newAddress(const Allocation &allocation, SIZE_T offset) const;
       SIZE_T bindCount(const Address &address) const;
+      SIZE_T querySize(const Allocation &allocation) const;
 
       virtual Address pool(SIZE_T size);
       virtual void repool(Address &address, SIZE_T newSize);
       virtual void unpool(Address &address);
       
-      virtual Allocation find(const Address &address);
+      virtual Allocation find(const Address &address) const;
       virtual Allocation null(void);
-      virtual Allocation allocate(SIZE_T size);
-      virtual void reallocate(Allocation &allocation, SIZE_T size);
-      virtual void deallocate(Allocation &allocation);
+      
+      Allocation allocate(SIZE_T size);
+      void reallocate(Allocation &allocation, SIZE_T size);
+      void deallocate(Allocation &allocation);
 
-      virtual Data read(const Address &address, SIZE_T size) const;
-      virtual void write(Address &destination, const Address &source, SIZE_T size);
+      Data read(const Address &address, SIZE_T size) const;
+      void write(Address &address, const Data data);
       
    protected:
-      void bind(Allocation *allocation, Address address);
-      void rebind(Allocation *allocation, Address newAddress);
+      void bind(Allocation *allocation, Address &address);
+      void rebind(Allocation *allocation, Address &newAddress);
       void unbind(Allocation *allocation);
+
+      virtual void allocate(Allocation *allocation, SIZE_T size);
+      virtual void reallocate(Allocation *allocation, SIZE_T size);
+      virtual void deallocate(Allocation *allocation, SIZE_T size);
+
+      Data splitRead(const Address &startAddress, SIZE_T size) const;
+      void splitWrite(Address &destination, const Data data);
+
+      /* functions for writing to/reading from directly to/from an allocation */
+      Data read(const Allocation *allocation, const Address &address, SIZE_T size) const;
+      void write(const Allocation *allocation, Address &destination, const Data data);
+
+      /* overloadable functions for writing to/from addresses themselves */
+      virtual Data readAddress(const Address &address, SIZE_T size) const;
+      virtual void writeAddress(Address &destination, const Data data);
    };
 }

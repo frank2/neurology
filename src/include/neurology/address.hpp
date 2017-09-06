@@ -11,9 +11,9 @@
 
 /* FIXME this doesn't belong here, but I feel like it will be useful later and
    just don't know where to put it right now. */
-#ifdef REG_DWORD == REG_DWORD_LITTLE_ENDIAN
 struct Register
 {
+#ifdef REG_DWORD == REG_DWORD_LITTLE_ENDIAN
    union
    {
       struct
@@ -51,14 +51,7 @@ struct Register
          };
       } byte;
    };
-
-   Register(void) { this->qword.value = 0; }
-   Register(std::uint64_t value) { this->qword.value = value; }
-   operator std::uint64_t(void) const { return this->qword.value; }
-};
 #else
-struct Register
-{
    union
    {
       struct
@@ -96,12 +89,22 @@ struct Register
          };
       } byte;
    };
+#endif
 
    Register(void) { this->qword.value = 0; }
    Register(std::uint64_t value) { this->qword.value = value; }
+   Register(std::uint32_t value) { this->dword.value = value; }
+   Register(std::uint16_t value) { this->word.value = value; }
+   Register(std::uint8_t value) { this->byte.value = value; }
    operator std::uint64_t(void) const { return this->qword.value; }
+   operator std::uint32_t(void) const { return this->dword.value; }
+   operator std::uint16_t(void) const { return this->word.value; }
+   operator std::uint8_t(void) const { return this->byte.value; }
+   void operator=(std::uint64_t value) { this->qword.value = value; }
+   void operator=(std::uint32_t value) { this->dword.value = value; }
+   void operator=(std::uint16_t value) { this->word.value = value; }
+   void operator=(std::uint8_t value) { this->byte.value = value; }
 };
-#endif
 
 namespace Neurology
 {
@@ -203,6 +206,22 @@ namespace Neurology
 
          NoSuchIdentifierException(AddressPool &pool, const Identifier identity);
       };
+
+      class BadRangeException : public Exception
+      {
+      public:
+         const Label minLabel, maxLabel;
+
+         BadRangeException(AddressPool &pool, const Label minLabel, const Label maxLabel);
+      };
+
+      class LabelNotInRangeException : public Exception
+      {
+      public:
+         const Label label;
+
+         LabelNotInRangeException(AddressPool &pool, const Label label);
+      };
       
    protected:
       /* a label can have multiple identities */
@@ -245,8 +264,8 @@ namespace Neurology
       void throwIfNotBound(const Address *address) const;
       void throwIfNotInRange(Label label) const;
 
-      Label min(void) const;
-      Label max(void) const;
+      Label minimum(void) const;
+      Label maximum(void) const;
       std::pair<Label, Label> range(void) const;
       void setMin(Label label);
       void setMax(Label label);
@@ -283,6 +302,7 @@ namespace Neurology
       void bind(const Address *address, const Identifier pointer);
       void rebind(const Address *address, const Identifier newIdentifier);
       void unbind(const Address *address);
+      void unbindOutOfBounds(void);
       
       void identify(Identifier identity, Label label);
       void reidentify(Identifier identity, Label newLabel);

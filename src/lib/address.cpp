@@ -66,10 +66,25 @@ AddressPool::NoSuchIdentifierException::NoSuchIdentifierException
 {
 }
 
+AddressPool::BadRangeException::BadRangeException
+(AddressPool &pool, const Label minLabel, const Label maxLabel)
+   : AddressPool::Exception(pool, EXCSTR(L"The address pool range is invalid."))
+   , minLabel(minLabel)
+   , maxLabel(maxLabel)
+{
+}
+
+AddressPool::LabelNotInRangeException::LabelNotInRangeException
+(AddressPool &pool, const Label label)
+   : AddressPool::Exception(pool, EXCSTR(L"The provided label is not in range of the pool."))
+   , label(label)
+{
+}
+
 AddressPool::AddressPool
 (void)
    : minLabel(0)
-   , maxLabel(std::UINTPTR_MAX)
+   , maxLabel(UINTPTR_MAX)
 {
 }
 
@@ -80,6 +95,12 @@ AddressPool::AddressPool
 {
    if (this->minLabel > this->maxLabel)
       throw BadRangeException(*this, minLabel, maxLabel);
+}
+
+AddressPool::AddressPool
+(AddressPool &pool)
+{
+   pool.drain(*this);
 }
 
 AddressPool::~AddressPool
@@ -127,7 +148,7 @@ AddressPool::drain
         iter!=this->associations.end();
         ++iter)
    {
-      iter->first->setPool(targetPool);
+      iter->first->setPool(&targetPool);
    }
 }
 
@@ -228,18 +249,18 @@ AddressPool::throwIfNotInRange
 (Label label) const
 {
    if (!this->inRange(label))
-      throw LabelNotInRangeException(*const_cast<Address Pool *>(this), label);
+      throw LabelNotInRangeException(*const_cast<AddressPool *>(this), label);
 }
 
 Label
-AddressPool::min
+AddressPool::minimum
 (void) const
 {
    return this->minLabel;
 }
 
 Label
-AddressPool::max
+AddressPool::maximum
 (void) const
 {
    return this->maxLabel;
@@ -389,7 +410,7 @@ AddressPool::shift
       Label label = snapIter->label();
 
       while ((identIter = this->labels[label].begin()) != this->labels[label].end())
-         this->relabel(*identIter, label+shift);
+         this->reidentify(*identIter, label+shift);
    }
 }
 
@@ -608,6 +629,40 @@ AddressPool::unbind
    {
       this->bindings.erase(assoc);
       this->releaseIdentifier(assoc);
+   }
+}
+
+void
+AddressPool::unbindOutOfBounds
+(void)
+{
+   AssociationMap::iterator assocIter;
+
+   assocIter = this->associations.begin();
+
+   while (assocIter != this->associations.end())
+   {
+      Address *prev, *next;
+      if (this->inRange(assocIter->first->label()))
+      {
+         ++assocIter;
+         continue;
+      }
+
+      /* if we unbind the address, we lose our iterator. compensate for this. */
+      prev = assocIter->first;
+      ++assocIter;
+
+      if (assocIter != this->associations.end())
+         next = assocIter->first;
+      else
+         next = NULL;
+      
+      /* this one's not in range, kill it. */
+      this->unbind(assocIter->first);
+
+      if (next != NULL)
+         assocIter = this->associations.find(next);
    }
 }
 
