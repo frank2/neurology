@@ -844,12 +844,6 @@ Address::~Address
       this->pool->unbind(this);
 }
 
-Address::operator Label
-(void) const
-{
-   return this->label();
-}
-
 void
 Address::operator=
 (const Address &address)
@@ -877,42 +871,42 @@ Address::operator=
 
 bool
 Address::operator<
-(const Address &address)
+(const Address &address) const
 {
    return this->label() < address.label();
 }
 
 bool
 Address::operator>
-(const Address &address)
+(const Address &address) const
 {
    return this->label() > address.label();
 }
 
 bool
 Address::operator==
-(const Address &address)
+(const Address &address) const
 {
    return this->label() == address.label();
 }
 
 bool
 Address::operator!=
-(const Address &address)
+(const Address &address) const
 {
    return this->label() != address.label();
 }
 
 bool
 Address::operator<=
-(const Address &address)
+(const Address &address) const
 {
    return this->label() <= address.label();
 }
 
 bool
 Address::operator>=
-(const Address &address)
+(const Address &address) const
 {
    return this->label() >= address.label();
 }
@@ -932,6 +926,18 @@ Address::operator+
 }
 
 Address
+Address::operator+
+(SIZE_T shift) const
+{
+   std::uintptr_t newValue = this->label() + shift;
+
+   if (newValue < this->label())
+      throw AddressOverflowException(*const_cast<Address *>(this), shift);
+   
+   return this->pool->address(newValue);
+}
+
+Address
 Address::operator-
 (std::intptr_t shift) const
 {
@@ -941,6 +947,18 @@ Address::operator-
       throw AddressUnderflowException(*const_cast<Address *>(this), shift);
    else if (shift < 0 && newValue < this->label())
       throw AddressOverflowException(*const_cast<Address *>(this), shift);
+   
+   return this->pool->address(this->label() - shift);
+}
+
+Address
+Address::operator-
+(SIZE_T shift) const
+{
+   std::uintptr_t newValue = this->label() - shift;
+
+   if (newValue > this->label())
+      throw AddressUnderflowException(*const_cast<Address *>(this), shift);
    
    return this->pool->address(this->label() - shift);
 }
@@ -969,6 +987,20 @@ Address::operator+=
 }
 
 Address &
+Address::operator+=
+(SIZE_T shift)
+{
+   std::uintptr_t newValue = this->label() + shift;
+
+   if (newValue < this->label())
+      throw AddressOverflowException(*const_cast<Address *>(this), shift);
+
+   this->move(newValue);
+   
+   return *this;
+}
+
+Address &
 Address::operator-=
 (std::intptr_t shift)
 {
@@ -978,6 +1010,19 @@ Address::operator-=
       throw AddressUnderflowException(*this, shift);
    else if (shift < 0 && newValue < this->label())
       throw AddressOverflowException(*this, shift);
+
+   this->move(newValue);
+   return *this;
+}
+
+Address &
+Address::operator-=
+(SIZE_T shift)
+{
+   std::uintptr_t newValue = this->label() - shift;
+
+   if (newValue > this->label())
+      throw AddressUnderflowException(*this, shift);
 
    this->move(newValue);
    return *this;

@@ -357,22 +357,24 @@ namespace Neurology
       Address(const Address &address);
       ~Address(void);
 
-      operator Label(void) const;
-
       void operator=(const Address &address);
 
-      bool operator<(const Address &address);
-      bool operator>(const Address &address);
-      bool operator==(const Address &address);
-      bool operator!=(const Address &address);
-      bool operator<=(const Address &address);
-      bool operator>=(const Address &address);
+      bool operator<(const Address &address) const;
+      bool operator>(const Address &address) const;
+      bool operator==(const Address &address) const;
+      bool operator!=(const Address &address) const;
+      bool operator<=(const Address &address) const;
+      bool operator>=(const Address &address) const;
 
       Address operator+(std::intptr_t shift) const;
+      Address operator+(SIZE_T shift) const;
       Address operator-(std::intptr_t shift) const;
+      Address operator-(SIZE_T shift) const;
       std::intptr_t operator-(const Address &address) const;
       Address &operator+=(std::intptr_t shift);
+      Address &operator+=(SIZE_T shift);
       Address &operator-=(std::intptr_t shift);
+      Address &operator-=(SIZE_T shift);
 
       bool hasPool(void) const;
       bool isNull(void) const;
