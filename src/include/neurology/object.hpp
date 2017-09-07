@@ -11,7 +11,7 @@
 
 namespace Neurology
 {
-   template <class Type, Allocator *AllocatorClass = &LocalAllocator::Instance>
+   template <class Type>
    class Object
    {
    public:
@@ -29,15 +29,6 @@ namespace Neurology
          Exception(const Object &object, const LPWSTR message)
             : Neurology::Exception(message)
             , object(object)
-         {
-         }
-      };
-
-      class VoidObjectException : public Exception
-      {
-      public:
-         VoidObjectException(const Object &object)
-            : Exception(object, EXCSTR(L"The object is void."))
          {
          }
       };
@@ -77,48 +68,34 @@ namespace Neurology
    public:
       Object(void)
          : built(false)
-         , allocator(AllocatorClass)
+         , allocator(&LocalAllocator::Instance)
       {
-      }
-
-      Object(const Type value)
-         : built(true)
-         , allocator(AllocatorClass)
-      {
-         this->assign(value);
       }
 
       Object(const Type &value)
          : built(true)
-         , allocator(AllocatorClass)
+         , allocator(&LocalAllocator::Instance)
       {
          this->assign(value);
       }
 
       Object(const Type *pointer)
          : built(true)
-         , allocator(AllocatorClass)
+         , allocator(&LocalAllocator::Instance)
       {
          this->assign(pointer, sizeof(Type));
       }
 
       Object(const Type *pointer, SIZE_T size)
          : built(true)
-         , allocator(AllocatorClass)
+         , allocator(&LocalAllocator::Instance)
       {
          this->assign(pointer, size);
       }
       
-      Object(Object &object)
+      Object(const Object &object)
          : built(object.built)
-         , allocator(AllocatorClass)
-      {
-         *this = object;
-      }
-
-      Object(const Object *object)
-         : built(object->built)
-         , allocator(AllocatorClass)
+         , allocator(object.allocator)
       {
          *this = object;
       }
@@ -132,38 +109,19 @@ namespace Neurology
             this->allocation.deallocate();
       }
       
-      void operator=(Object &object)
+      void operator=(const Object &object)
       {
          this->allocator = object.allocator;
          this->allocation.copy(object.allocation);
          this->built = object.built;
       }
 
-      void operator=(const Object *object)
-      {
-         this->allocator = object->allocator;
-
-         if (this->allocation.isValid())
-            this->allocation.deallocate();
-
-         if (object->allocation.isValid())
-         {
-            this->allocation = this->allocator->null();
-            this->allocation.clone(object->allocation);
-         }
-      }
-
-      void operator=(Type type)
+      void operator=(const Type &type)
       {
          this->assign(type);
       }
 
-      void operator=(Type &type)
-      {
-         this->assign(type);
-      }
-
-      void operator=(Type *type)
+      void operator=(const Type *type)
       {
          this->assign(type);
       }
@@ -210,27 +168,19 @@ namespace Neurology
          Data data;
          
          if (!this->allocation.isValid())
-            this->allocation = this->allocator.allocate(size);
+            this->allocation = this->allocator->allocate(size);
 
          data = BlockData(const_cast<LPVOID>(pointer), size);
          
-         if (!this->built)
-         {
-            try
-            {
-               /* should pass by value or pass by reference, depending on which is there */
-               this->construct(*reinterpret_cast<Type *>(data.data()));
-            }
-            catch (std::exception &exception)
-            {
-               UNUSED(exception);
-
-               /* maybe it accepts a pointer for copy? try that and throw if it fails. */
-               this->construct(reinterpret_cast<Type *>(data.data()));
-            }
-         }
+         if (!this->built && std::is_copy_constructible<Type>::value)
+            this->construct(*reinterpret_cast<Type *>(data.data()));
+         else if (this->built && std::is_copy_assignable<Type>::value)
+            **this = *reinterpret_cast<Type *>(data.data());
          else
             this->allocation.write(BlockData(const_cast<LPVOID>(pointer), size));
+
+         if (!this->built) // well that's wrong.
+            this->built = true;
       }
 
       virtual void reassign(const Type &value)
@@ -252,12 +202,18 @@ namespace Neurology
 
       virtual void reassign(const LPVOID pointer, SIZE_T size)
       {
-         if (!this->allocation.isValid())
-            this->allocation = this->allocator.allocate(size);
-         else
-            this->allocation.reallocate(size);
+         Data data;
          
-         this->allocation.write(BlockData(const_cast<LPVOID>(pointer), size));
+         if (!this->allocation.isValid())
+            return this->assign(pointer, size);
+         
+         this->allocation.reallocate(size);
+         data = BlockData(const_cast<LPVOID>(pointer), size);
+         
+         if (std::is_copy_assignable<Type>::value)
+            **this = *reinterpret_cast<Type *>(data.data());
+         else
+            this->allocation.write(), size));
       }
 
       virtual Type *pointer(void)
@@ -290,7 +246,7 @@ namespace Neurology
          if (this->built)
             throw AlreadyConstructedException(*this);
          
-         new (this->pointer()) Type(args...);
+         new(this->pointer()) Type(args...);
          this->built = true;
       }
 

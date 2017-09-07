@@ -39,6 +39,7 @@ LocalAllocator::LocalAllocator
 (void)
    : Allocator()
 {
+   this->split = false;
 }
 
 Address
