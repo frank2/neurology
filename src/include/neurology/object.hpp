@@ -5,21 +5,13 @@
 #include <new>
 #include <type_traits>
 
+#include <neurology/allocators/local.hpp>
+#include <neurology/allocators/void.hpp>
 #include <neurology/exception.hpp>
 
 namespace Neurology
 {
-   template<class Type, class ReturnType=Type, class IndexType=int>
-   struct has_index_op
-   {
-   public:
-      template<typename TestType, ReturnType & (TestType::*)(IndexType)> struct SFINAE {};
-      template<typename U> static char Test(SFINAE<U, &U::operator[]>*);
-      template<typename U> static int Test(...);
-      static const bool value = sizeof(Test<Type>(0)) == sizeof(char);
-   };
-   
-   template <class Type>
+   template <class Type, Allocator *AllocatorClass = &LocalAllocator::Instance>
    class Object
    {
    public:
@@ -78,317 +70,112 @@ namespace Neurology
       };
 
    protected:
+      Allocator *allocator;
+      Allocation allocation;
       bool built;
 
    public:
       Object(void)
          : built(false)
+         , allocator(AllocatorClass)
       {
-      }
-
-      Object(SIZE_T size)
-         : built(false)
-      {
-         throw VoidObjectException(*this);
       }
 
       Object(const Type value)
          : built(true)
+         , allocator(AllocatorClass)
       {
-         this->reassign(value);
+         this->assign(value);
       }
 
       Object(const Type &value)
          : built(true)
+         , allocator(AllocatorClass)
       {
-         this->reassign(value);
+         this->assign(value);
       }
 
       Object(const Type *pointer)
          : built(true)
+         , allocator(AllocatorClass)
       {
-         this->reassign(pointer, sizeof(Type));
+         this->assign(pointer, sizeof(Type));
       }
 
       Object(const Type *pointer, SIZE_T size)
          : built(true)
+         , allocator(AllocatorClass)
       {
-         this->reassign(pointer, size);
+         this->assign(pointer, size);
       }
       
       Object(Object &object)
          : built(object.built)
+         , allocator(AllocatorClass)
       {
          *this = object;
       }
 
       Object(const Object *object)
          : built(object->built)
+         , allocator(AllocatorClass)
       {
          *this = object;
       }
 
       ~Object(void)
       {
+         if (this->built)
+            this->destruct();
+         
+         if (this->allocation.isValid())
+            this->allocation.deallocate();
       }
       
       void operator=(Object &object)
       {
-         throw VoidObjectException(*this);
+         this->allocator = object.allocator;
+         this->allocation.copy(object.allocation);
+         this->built = object.built;
       }
 
       void operator=(const Object *object)
       {
-         throw VoidObjectException(*this);
+         this->allocator = object->allocator;
+
+         if (this->allocation.isValid())
+            this->allocation.deallocate();
+
+         if (object->allocation.isValid())
+         {
+            this->allocation = this->allocator->null();
+            this->allocation.clone(object->allocation);
+         }
+      }
+
+      void operator=(Type type)
+      {
+         this->assign(type);
+      }
+
+      void operator=(Type &type)
+      {
+         this->assign(type);
+      }
+
+      void operator=(Type *type)
+      {
+         this->assign(type);
       }
 
       Type &operator*(void)
       {
-         return this->resolve();
+         return this->reference();
       }
 
       const Type &operator*(void) const
       {
-         return this->resolve();
-      }
-      
-      Type operator+(const Type &right)
-      {
-         return **this + right;
-      }
-
-      const Type operator+(const Type &right) const
-      {
-         return **this + right;
-      }
-
-      Type operator-(const Type &right)
-      {
-         return **this - right;
-      }
-
-      const Type operator-(const Type &right) const
-      {
-         return **this - right;
-      }
-
-      Type operator*(const Type &right)
-      {
-         return **this * right;
-      }
-
-      const Type operator*(const Type &right) const
-      {
-         return **this * right;
-      }
-
-      Type operator/(const Type &right)
-      {
-         return **this / right;
-      }
-
-      const Type operator/(const Type &right) const
-      {
-         return **this / right;
-      }
-
-      Type operator%(const Type &right)
-      {
-         return **this % right;
-      }
-
-      const Type operator%(const Type &right) const
-      {
-         return **this % right;
-      }
-
-      Type &operator++(void)
-      {
-         **this = **this + 1;
-         return **this;
-      }
-
-      Type operator++(int dummy)
-      {
-         **this = **this + 1;
-         return **this;
-      }
-
-      Type &operator--(void)
-      {
-         **this = **this - 1;
-         return **this;
-      }
-
-      Type operator--(int dummy)
-      {
-         **this = **this - 1;
-         return **this;
-      }
-
-      bool operator==(const Type &right) const
-      {
-         return **this == right;
-      }
-
-      bool operator!=(const Type &right) const
-      {
-         return **this != right;
-      }
-
-      bool operator>(const Type &right) const
-      {
-         return **this > right;
-      }
-
-      bool operator<(const Type &right) const
-      {
-         return **this < right;
-      }
-
-      bool operator>=(const Type &right) const
-      {
-         return **this >= right;
-      }
-
-      bool operator<=(const Type right) const
-      {
-         return **this <= right;
-      }
-
-      bool operator!(void) const
-      {
-         return !**this;
-      }
-
-      bool operator&&(const Type &right) const
-      {
-         return **this && right;
-      }
-
-      bool operator||(const Type right) const
-      {
-         return **this || right;
-      }
-
-      Type operator~(void)
-      {
-         return ~**this;
-      }
-
-      const Type operator~(void) const
-      {
-         return ~**this;
-      }
-
-      Type operator&(const Type &right)
-      {
-         return **this & right;
-      }
-
-      const Type operator&(const Type &right) const
-      {
-         return **this & right;
-      }
-
-      Type operator|(const Type &right)
-      {
-         return **this | right;
-      }
-
-      const Type operator|(const Type &right) const
-      {
-         return **this | right;
-      }
-
-      Type operator^(const Type &right)
-      {
-         return **this ^ right;
-      }
-
-      const Type operator^(const Type &right) const
-      {
-         return **this ^ right;
-      }
-
-      Type operator<<(const Type &right)
-      {
-         return **this << right;
-      }
-
-      const Type operator<<(const Type &right) const
-      {
-         return **this << right;
-      }
-
-      Type operator>>(const Type &right)
-      {
-         return **this >> right;
-      }
-
-      const Type operator>>(const Type &right) const
-      {
-         return **this >> right;
-      }
-
-      Type &operator+=(const Type &right)
-      {
-         **this = **this + right;
-         return **this;
-      }
-
-      Type &operator-=(const Type &right)
-      {
-         **this = **this - right;
-         return **this;
-      }
-
-      Type &operator*=(const Type &right)
-      {
-         **this = **this * right;
-         return **this;
-      }
-
-      Type &operator/=(const Type &right)
-      {
-         **this = **this / right;
-         return **this;
-      }
-
-      Type &operator%=(const Type &right)
-      {
-         **this = **this % right;
-         return **this;
-      }
-
-      Type &operator&=(const Type &right)
-      {
-         **this = **this & right;
-         return **this;
-      }
-
-      Type &operator|=(const Type &right)
-      {
-         **this = **this | right;
-         return **this;
-      }
-
-      Type &operator^=(const Type &right)
-      {
-         **this = **this ^ right;
-         return **this;
-      }
-
-      Type &operator<<=(const Type &right)
-      {
-         **this = **this << right;
-         return **this;
-      }
-
-      Type &operator>>=(const Type &right)
-      {
-         **this = **this >> right;
-         return **this;
+         return this->reference();
       }
 
       Type *operator->(void)
@@ -420,7 +207,30 @@ namespace Neurology
 
       virtual void assign(const LPVOID pointer, SIZE_T size)
       {
-         throw VoidObjectException(*this);
+         Data data;
+         
+         if (!this->allocation.isValid())
+            this->allocation = this->allocator.allocate(size);
+
+         data = BlockData(const_cast<LPVOID>(pointer), size);
+         
+         if (!this->built)
+         {
+            try
+            {
+               /* should pass by value or pass by reference, depending on which is there */
+               this->construct(*reinterpret_cast<Type *>(data.data()));
+            }
+            catch (std::exception &exception)
+            {
+               UNUSED(exception);
+
+               /* maybe it accepts a pointer for copy? try that and throw if it fails. */
+               this->construct(reinterpret_cast<Type *>(data.data()));
+            }
+         }
+         else
+            this->allocation.write(BlockData(const_cast<LPVOID>(pointer), size));
       }
 
       virtual void reassign(const Type &value)
@@ -442,25 +252,34 @@ namespace Neurology
 
       virtual void reassign(const LPVOID pointer, SIZE_T size)
       {
-         throw VoidObjectException(*this);
+         if (!this->allocation.isValid())
+            this->allocation = this->allocator.allocate(size);
+         else
+            this->allocation.reallocate(size);
+         
+         this->allocation.write(BlockData(const_cast<LPVOID>(pointer), size));
       }
 
       virtual Type *pointer(void)
       {
-         throw VoidObjectException(*this);
+         this->allocation.throwIfInvalid();
+         return reinterpret_cast<Type *>(this->allocation.address().label());
       }
 
       virtual const Type *pointer(void) const
       {
-         throw VoidObjectException(*this);
+         this->allocation.throwIfInvalid();
+         
+         return const_cast<const Type *>(
+            reinterpret_cast<Type *>(this->allocation.address().label()));
       }
 
-      virtual Type &resolve(void)
+      virtual Type &reference(void)
       {
          return *this->pointer();
       }
 
-      virtual const Type &resolve(void) const
+      virtual const Type &reference(void) const
       {
          return *this->pointer();
       }
@@ -482,6 +301,9 @@ namespace Neurology
          
          this->pointer()->~Type();
          this->built = false;
+
+         if (this->allocation.isValid())
+            this->allocation.deallocate();
       }
    };
 }

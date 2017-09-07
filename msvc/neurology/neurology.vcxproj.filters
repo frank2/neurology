@@ -96,6 +96,12 @@
     <ClInclude Include="..\..\src\include\neurology\allocators\void.hpp">
       <Filter>Header Files\neurology\allocators</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\src\include\neurology\allocators\local.hpp">
+      <Filter>Header Files\neurology\allocators</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\include\neurology\object.hpp">
+      <Filter>Header Files\neurology</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\lib\exception.cpp">
@@ -135,6 +141,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\lib\allocators\void.cpp">
+      <Filter>Source Files\allocators</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\lib\allocators\local.cpp">
       <Filter>Source Files\allocators</Filter>
     </ClCompile>
   </ItemGroup>

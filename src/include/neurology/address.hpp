@@ -3,6 +3,7 @@
 #include <windows.h>
 
 #include <cstdint>
+#include <limits>
 #include <map>
 #include <set>
 #include <vector>
@@ -11,9 +12,10 @@
 
 /* FIXME this doesn't belong here, but I feel like it will be useful later and
    just don't know where to put it right now. */
-struct Register
+class Register
 {
-#ifdef REG_DWORD == REG_DWORD_LITTLE_ENDIAN
+public:
+#if REG_DWORD == REG_DWORD_LITTLE_ENDIAN
    union
    {
       struct
@@ -116,19 +118,18 @@ namespace Neurology
       less dynamic than std::shared_ptr, but it operates as if the pointers are 
       not only not typed, but merely numeric labels.
 
-      imagine having multiple objects all referring to the same piece of memory
-      in some way or another. now imagine that someone reallocates that memory
-      and its address changes. how do you change all the underlying objects to
-      point to the new region? how can you design it in such a way that makes it
-      highly difficult to change the core pointer but still maintain pointer
-      functionality? what about pointers to memory that's in another process
-      entirely? how do you verify whether or not the pointer you have is valid?
+      there is a reason for this. it will be common in use-cases of Neurology for
+      you to know an address, but not have local access to it-- for it would be
+      in *another* process. this means the address must be agnostic to whether or
+      not you're tied to local memory. in addition to this, Addresses are designed
+      to be passed around willy-nilly with no worry as to where they are. but at
+      the same time, since an address can move out from under you as in the cases
+      of memory allocation, they're designed so that the base pointer all Address
+      objects wind up pointing to can be moved arbitrarily without too much trouble.
 
-      this address system is my answer to that. believe me, I like pointers, but
-      since we're stuck in the object-oriented hellscape of Stoutrup's nightmares
-      we might as well try to try to build some guardrails around the inherent
-      "unsafety" of pointers. I love pointers and I love that freedom, but hey,
-      if we have the tools to make it kind of safe, why not use them?
+      if you've gone this far in the code, hey, congrats, welcome to the darkness,
+      I'll be your angler fish. but it's very likely you didn't mean to go this far.
+      check out <neurology/pointer.hpp>.
    */
    class Address;
 

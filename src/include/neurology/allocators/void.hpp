@@ -8,7 +8,6 @@
 
 #include <neurology/address.hpp>
 #include <neurology/exception.hpp>
-#include <neurology/object.hpp>
 
 #define BlockData(ptr, size) Neurology::Data(static_cast<LPBYTE>(ptr), static_cast<LPBYTE>(ptr)+(size))
 #define PointerData(ptr) BlockData(ptr, sizeof(*ptr))
@@ -18,7 +17,210 @@ namespace Neurology
 {
    typedef std::vector<BYTE> Data;
 
-   class Allocator;
+   class Allocation;
+
+   class Allocator
+   {
+      friend Allocation;
+      
+   public:
+      /* define the Allocator exceptions */
+      class Exception : public Neurology::Exception
+      {
+      public:
+         Allocator &allocator;
+
+         Exception(Allocator &allocator, const LPWSTR message);
+      };
+
+      class ZeroSizeException : public Exception
+      {
+      public:
+         ZeroSizeException(Allocator &allocator);
+      };
+
+      class PoolAllocationException : public Exception
+      {
+      public:
+         PoolAllocationException(Allocator &allocator);
+      };
+
+      class UnpooledAddressException : public Exception
+      {
+      public:
+         const Address &address;
+
+         UnpooledAddressException(Allocator &allocator, const Address &address);
+      };
+
+      class BindingException : public Exception
+      {
+      public:
+         Allocation &allocation;
+         
+         BindingException(Allocator &allocator, Allocation &allocation, const LPWSTR message);
+      };
+
+      class BoundAllocationException : public BindingException
+      {
+      public:
+         BoundAllocationException(Allocator &allocator, Allocation &allocation);
+      };
+
+      class UnboundAllocationException : public BindingException
+      {
+      public:
+         UnboundAllocationException(Allocator &allocator, Allocation &allocation);
+      };
+
+      class UnmanagedAllocationException : public Exception
+      {
+      public:
+         Allocation &allocation;
+
+         UnmanagedAllocationException(Allocator &allocator, Allocation &allocation);
+      };
+
+      class InsufficientSizeException : public Exception
+      {
+      public:
+         const SIZE_T size;
+         
+         InsufficientSizeException(Allocator &allocation, const SIZE_T size);
+      };
+
+      class VoidAllocatorException : public Exception
+      {
+      public:
+         VoidAllocatorException(Allocator &allocator);
+      };
+
+      class UnallocatedAddressException : public Exception
+      {
+      public:
+         Address &address;
+
+         UnallocatedAddressException(Allocator &allocator, Address &address);
+      };
+
+      class SplitsExceededException : public Exception
+      {
+      public:
+         Address &address;
+         SIZE_T size;
+
+         SplitsExceededException(Allocator &allocator, Address &address, SIZE_T size);
+      };
+
+      typedef std::map<Address, SIZE_T> MemoryPool;
+      typedef std::map<Address, AddressPool *> AddressPoolMap;
+      typedef std::map<Allocation *, Address> AssociationMap;
+      typedef std::map<Address, std::set<Allocation *> > BindingMap;
+      
+   protected:
+      bool split;
+      AddressPool pooledAddresses;
+      MemoryPool pooledMemory;
+      AddressPoolMap addressPools;
+      AssociationMap associations;
+      BindingMap bindings;
+
+   public:
+      Allocator(void);
+      Allocator(bool split);
+      ~Allocator(void);
+
+      void allowSplitting(void);
+      void denySplitting(void);
+      bool splits(void) const;
+
+      bool isPooled(const Address &address) const;
+      bool isAssociated(const Allocation &allocation) const;
+      bool isBound(const Allocation &allocation) const;
+      bool hasAddress(const Address &address) const;
+      bool willSplit(const Address &address, SIZE_T size) const;
+
+      void throwIfNotPooled(const Address &address) const;
+      void throwIfNotAssociated(const Allocation &allocation) const;
+      void throwIfBound(const Allocation &allocation) const;
+      void throwIfNotBound(const Allocation &allocation) const;
+      void throwIfNoAllocation(const Address &address) const;
+
+      const Address addressOf(const Allocation &allocation) const;
+      Address address(const Allocation &allocation);
+      Address address(const Allocation &allocation, SIZE_T offset);
+      Address newAddress(const Allocation &allocation);
+      Address newAddress(const Allocation &allocation, SIZE_T offset);
+      SIZE_T bindCount(const Address &address) const;
+      SIZE_T querySize(const Allocation &allocation) const;
+
+      Address pool(SIZE_T size);
+      Address repool(Address &address, SIZE_T newSize);
+      void unpool(Address &address);
+      
+      virtual Allocation find(const Address &address) const;
+      virtual Allocation null(void);
+      virtual Allocation null(void) const;
+      
+      Allocation allocate(SIZE_T size);
+      
+      template <class Type> Allocation allocate(void)
+      {
+         return this->allocate(sizeof(Type));
+      }
+
+      template <class Type> Allocation allocate(SIZE_T size)
+      {
+         if (sizeof(Type) > size)
+            throw InsufficientSizeException(*this, size);
+
+         return this->allocate(size);
+      }
+         
+      void reallocate(const Allocation &allocation, SIZE_T size);
+
+      template <class Type> void reallocate(const Allocation &allocation)
+      {
+         this->reallocate(allocation, sizeof(Type));
+      }
+
+      template <class Type> Allocation reallocate(const Allocation &allocation, SIZE_T size)
+      {
+         if (sizeof(Type) > size)
+            throw InsufficientSizeException(*this, size);
+
+         return this->reallocate(allocation, size);
+      }
+      
+      void deallocate(Allocation &allocation);
+
+      Data read(const Address &address, SIZE_T size) const;
+      void write(const Address &address, const Data data);
+      
+   protected:
+      virtual Address poolAddress(SIZE_T size);
+      virtual Address repoolAddress(Address &address, SIZE_T newSize);
+      virtual void unpoolAddress(Address &address);
+      
+      virtual void allocate(Allocation *allocation, SIZE_T size);
+      virtual void reallocate(Allocation *allocation, SIZE_T size);
+      virtual void deallocate(Allocation *allocation);
+
+      void bind(Allocation *allocation, const Address &address);
+      void rebind(Allocation *allocation, const Address &newAddress);
+      void unbind(Allocation *allocation);
+
+      Data splitRead(const Address &startAddress, SIZE_T size) const;
+      void splitWrite(const Address &destination, const Data data);
+
+      /* functions for writing to/reading from directly to/from an allocation */
+      Data read(const Allocation *allocation, const Address &address, SIZE_T size) const;
+      void write(const Allocation *allocation, const Address &destination, const Data data);
+
+      /* overloadable functions for writing to/from addresses themselves */
+      virtual Data readAddress(const Address &address, SIZE_T size) const;
+      virtual void writeAddress(const Address &destination, const Data data);
+   };
    
    class Allocation
    {
@@ -147,208 +349,5 @@ namespace Neurology
 
       void copy(Allocation &allocation);
       void clone(const Allocation &allocation);
-   };
-
-   class Allocator
-   {
-      friend Allocation;
-      
-   public:
-      /* define the Allocator exceptions */
-      class Exception : public Neurology::Exception
-      {
-      public:
-         Allocator &allocator;
-
-         Exception(Allocator &allocator, const LPWSTR message);
-      };
-
-      class ZeroSizeException : public Exception
-      {
-      public:
-         ZeroSizeException(Allocator &allocator);
-      };
-
-      class PoolAllocationException : public Exception
-      {
-      public:
-         PoolAllocationException(Allocator &allocator);
-      };
-
-      class UnpooledAddressException : public Exception
-      {
-      public:
-         const Address &address;
-
-         UnpooledAddressException(Allocator &allocator, const Address &address);
-      };
-
-      class BindingException : public Exception
-      {
-      public:
-         Allocation &allocation;
-         
-         BindingException(Allocator &allocator, Allocation &allocation, const LPWSTR message);
-      };
-
-      class BoundAllocationException : public BindingException
-      {
-      public:
-         BoundAllocationException(Allocator &allocator, Allocation &allocation);
-      };
-
-      class UnboundAllocationException : public BindingException
-      {
-      public:
-         UnboundAllocationException(Allocator &allocator, Allocation &allocation);
-      };
-
-      class UnmanagedAllocationException : public Exception
-      {
-      public:
-         Allocation &allocation;
-
-         UnmanagedAllocationException(Allocator &allocator, Allocation &allocation);
-      };
-
-      class InsufficientSizeException : public Exception
-      {
-      public:
-         const SIZE_T size;
-         
-         InsufficientSizeException(Allocator &allocation, const SIZE_T size);
-      };
-
-      class VoidAllocatorException : public Exception
-      {
-      public:
-         VoidAllocatorException(Allocator &allocator);
-      };
-
-      class UnallocatedAddressException : public Exception
-      {
-      public:
-         Address &address;
-
-         UnallocatedAddressException(Allocator &allocator, Address &address);
-      };
-
-      class SplitsExceededException : public Exception
-      {
-      public:
-         Address &address;
-         SIZE_T size;
-
-         SplitsExceededException(Allocator &allocator, Address &address, SIZE_T size);
-      };
-
-      typedef std::map<Address, SIZE_T> MemoryPool;
-      typedef std::map<Address, AddressPool> AddressPoolMap;
-      typedef std::map<Allocation *, Address> AssociationMap;
-      typedef std::map<Address, std::set<Allocation *> > BindingMap;
-      
-   protected:
-      bool split;
-      AddressPool pooledAddresses;
-      MemoryPool pooledMemory;
-      AddressPoolMap addressPools;
-      AssociationMap associations;
-      BindingMap bindings;
-
-   public:
-      Allocator(void);
-      Allocator(bool split);
-      ~Allocator(void);
-
-      void allowSplitting(void);
-      void denySplitting(void);
-      bool splits(void) const;
-
-      bool isPooled(const Address &address) const;
-      bool isAssociated(const Allocation &allocation) const;
-      bool isBound(const Allocation &allocation) const;
-      bool hasAddress(const Address &address) const;
-      bool willSplit(const Address &address, SIZE_T size) const;
-
-      void throwIfNotPooled(const Address &address) const;
-      void throwIfNotAssociated(const Allocation &allocation) const;
-      void throwIfBound(const Allocation &allocation) const;
-      void throwIfNotBound(const Allocation &allocation) const;
-      void throwIfNoAllocation(const Address &address) const;
-
-      const Address addressOf(const Allocation &allocation) const;
-      Address address(const Allocation &allocation);
-      Address address(const Allocation &allocation, SIZE_T offset);
-      Address newAddress(const Allocation &allocation);
-      Address newAddress(const Allocation &allocation, SIZE_T offset);
-      SIZE_T bindCount(const Address &address) const;
-      SIZE_T querySize(const Allocation &allocation) const;
-
-      Address pool(SIZE_T size);
-      Address repool(Address &address, SIZE_T newSize);
-      void unpool(Address &address);
-      
-      virtual Allocation find(const Address &address) const;
-      virtual Allocation null(void);
-      virtual Allocation null(void) const;
-      
-      Allocation allocate(SIZE_T size);
-      
-      template <class Type> Allocation allocate(void)
-      {
-         return this->allocate(sizeof(Type));
-      }
-
-      template <class Type> Allocation allocate(SIZE_T size)
-      {
-         if (sizeof(Type) > size)
-            throw InsufficientSizeException(*this, size);
-
-         return this->allocate(size);
-      }
-         
-      void reallocate(const Allocation &allocation, SIZE_T size);
-
-      template <class Type> void reallocate(const Allocation &allocation)
-      {
-         this->reallocate(allocation, sizeof(Type));
-      }
-
-      template <class Type> Allocation reallocate(const Allocation &allocation, SIZE_T size)
-      {
-         if (sizeof(Type) > size)
-            throw InsufficientSizeException(*this, size);
-
-         return this->reallocate(allocation, size);
-      }
-      
-      void deallocate(Allocation &allocation);
-
-      Data read(const Address &address, SIZE_T size) const;
-      void write(const Address &address, const Data data);
-      
-   protected:
-      virtual Address poolAddress(SIZE_T size);
-      virtual Address repoolAddress(const Address &address, SIZE_T newSize);
-      virtual void unpoolAddress(Address &address);
-      
-      virtual void allocate(Allocation *allocation, SIZE_T size);
-      virtual void reallocate(Allocation *allocation, SIZE_T size);
-      virtual void deallocate(Allocation *allocation);
-
-      void bind(Allocation *allocation, const Address &address);
-      void rebind(Allocation *allocation, const Address &newAddress);
-      void unbind(Allocation *allocation);
-
-      Data splitRead(const Address &startAddress, SIZE_T size) const;
-      void splitWrite(const Address &destination, const Data data);
-
-      /* functions for writing to/reading from directly to/from an allocation */
-      Data read(const Allocation *allocation, const Address &address, SIZE_T size) const;
-      void write(const Allocation *allocation, const Address &destination, const Data data);
-
-      /* overloadable functions for writing to/from addresses themselves */
-      virtual Data readAddress(const Address &address, SIZE_T size) const;
-      virtual void writeAddress(const Address &destination, const Data data);
    };
 }

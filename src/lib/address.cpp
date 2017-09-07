@@ -81,12 +81,18 @@ AddressPool::LabelNotInRangeException::LabelNotInRangeException
 {
 }
 
+/* Windows is fucking rude basically */
+#pragma push_macro("max")
+#undef max
+
 AddressPool::AddressPool
 (void)
    : minLabel(0)
-   , maxLabel(UINTPTR_MAX)
+   , maxLabel(std::numeric_limits<Label>::max())
 {
 }
+
+#pragma pop_macro("max")
 
 AddressPool::AddressPool
 (Label minLabel, Label maxLabel)
@@ -833,6 +839,7 @@ Address::Address
 
 Address::Address
 (const Address &address)
+   : pool(NULL)
 {
    *this = address;
 }
@@ -862,7 +869,7 @@ Address::operator=
    
    address.pool->throwIfNotAssociated(&address);
 
-   if (this->pool->isBound(this))
+   if (this->hasPool() && this->pool->isBound(this))
       this->pool->unbind(this);
 
    this->pool = address.pool;
@@ -880,14 +887,14 @@ bool
 Address::operator>
 (const Address &address) const
 {
-   return this->label() > address.label();
+   return address < *this;
 }
 
 bool
 Address::operator==
 (const Address &address) const
 {
-   return this->label() == address.label();
+   return !(*this < address) && !(address < *this);
 }
 
 bool
@@ -1044,7 +1051,7 @@ Address::isNull
 
 bool
 Address::usesPool
-(const AddressPool *pool)
+(const AddressPool *pool) const
 {
    return this->pool == pool;
 }
