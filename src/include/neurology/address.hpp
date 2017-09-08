@@ -438,10 +438,8 @@ namespace Neurology
       Address operator*(void);
       const Address operator*(void) const;
 
-      Address getAddress(void);
-      const Address getAddress(void) const;
-      Address &getBaseAddress(void);
-      const Address &getBaseAddress(void) const;
+      Address address(void);
+      const Address address(void) const;
       void setAddress(Address &address);
       std::uintptr_t getOffset(void) const;
       void setOffset(std::uintptr_t offset);
