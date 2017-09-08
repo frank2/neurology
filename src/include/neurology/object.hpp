@@ -14,6 +14,9 @@ namespace Neurology
    template <class Type>
    class Object
    {
+      std::static_assert(!std::is_void(Type), "Objects cannot be a void type, for void has no value.\n"
+                         "Try creating an Object with a void pointer, or create a Pointer object instead.");
+
    public:
       typedef Type BaseType;
       typedef Type *PointedType;

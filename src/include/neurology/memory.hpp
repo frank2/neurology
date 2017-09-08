@@ -5,7 +5,7 @@
 #include <vector>
 
 #include <neurology/exception.hpp>
-#include <neurology/reference.hpp>
+#include <neurology/object.hpp>
 
 namespace Neurology
 {
@@ -144,58 +144,17 @@ namespace Neurology
          void unmarkExecutable(void);
       };
 
-      class Reference : public Neurology::Reference
-      {
-      public:
-         const static bool STATE_POINTER = false;
-         const static bool STATE_OFFSET = true;
-         
-      protected:
-         bool state;
-         
-         union
-         {
-            LPVOID *pointerRef;
-            SIZE_T *offsetRef;
-         };
-
-         SIZE_T *sizeRef;
-         Mode *modeRef;
-
-      public:
-         Reference(void);
-         Reference(LPVOID pointer, SIZE_T size, Mode mode);
-         Reference(SIZE_T offset, SIZE_T size, Mode mode);
-
-         virtual void operator=(Reference &reference);
-         virtual void operator=(const Reference &reference);
-
-         virtual bool isNull(void) const;
-         bool isNullAddress(void) const;
-         bool state(void) const;
-         void setState(bool state);
-         LPVOID pointer(void) const;
-         void setPointer(LPVOID pointer);
-         SIZE_T offset(void) const;
-         void setOffset(SIZE_T offset);
-         SIZE_T size(void) const;
-         void setSize(SIZE_T size);
-         Mode mode(void) const;
-         void setMode(Mode mode);
-
-      protected:
-         virtual void allocate(void);
-         virtual void release(void);
-      };
-
    protected:
       Memory *parent;
-      Memory::Reference reference;
+         
+      Offset offset;
+      Object<SIZE_T> size;
+      Object<Mode> mode;
 
    public:
       Memory(void);
-      Memory(LPVOID pointer, SIZE_T size, Mode mode);
-      Memory(Memory *parent, SIZE_T offset, SIZE_T size, Mode mode);
+      Memory(const Address &address, SIZE_T size, const Mode &mode);
+      Memory(Memory *parent, const Offset &offset, SIZE_T size, const Mode &mode);
       Memory(Memory &memory);
       Memory(const Memory &memory);
 
@@ -204,18 +163,9 @@ namespace Neurology
 
       Memory *getParent(void);
       const Memory *getParent(void) const;
-      
-      /* reference data */
-      void ref(void);
-      void deref(void);
-      DWORD refs(void) const;
-      bool isNull(void) const;
-      bool isNullAddress(void) const;
-      bool isValid(void) const;
-      virtual void invalidate(void);
 
       /* mode data */
-      Mode mode(void) const;
+      Mode &mode(void) const;
       bool readable(void) const;
       bool writable(void) const;
       bool executable(void) const;

@@ -89,7 +89,7 @@ LocalAllocator::unpoolAddress
 
    this->pooledMemory.erase(address);
 
-   delete[] reinterpret_cast<LPVOID>(address.label());
+   delete[] address.pointer();
 }
 
 Data
@@ -100,7 +100,7 @@ LocalAllocator::readAddress
    LONG status;
 
    result.resize(size);
-   status = CopyData(result.data(), reinterpret_cast<LPVOID>(address.label()), size);
+   status = CopyData(result.data(), address.pointer(), size);
 
    if (status != 0)
       throw KernelFaultException(const_cast<LocalAllocator &>(*this)
@@ -118,7 +118,7 @@ LocalAllocator::writeAddress
 {
    LONG status;
 
-   status = CopyData(reinterpret_cast<LPVOID>(destination.label())
+   status = CopyData(destination.pointer(),
                      ,static_cast<LPVOID>(
                         const_cast<LPBYTE>(data.data()))
                      ,data.size());

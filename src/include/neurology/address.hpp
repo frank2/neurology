@@ -271,7 +271,7 @@ namespace Neurology
       void setMin(Label label);
       void setMax(Label label);
       void setRange(std::pair<Label, Label> range);
-      SIZE_T size(void) const;
+      std::uintptr_t size(void) const;
       
       Address address(const LPVOID pointer);
       Address address(Label label);
@@ -368,26 +368,31 @@ namespace Neurology
       bool operator>=(const Address &address) const;
 
       Address operator+(std::intptr_t shift) const;
-      Address operator+(SIZE_T shift) const;
+      Address operator+(std::uintptr_t shift) const;
       Address operator-(std::intptr_t shift) const;
-      Address operator-(SIZE_T shift) const;
+      Address operator-(std::uintptr_t shift) const;
       std::intptr_t operator-(const Address &address) const;
       Address &operator+=(std::intptr_t shift);
-      Address &operator+=(SIZE_T shift);
+      Address &operator+=(std::uintptr_t shift);
       Address &operator-=(std::intptr_t shift);
-      Address &operator-=(SIZE_T shift);
+      Address &operator-=(std::uintptr_t shift);
+
+      LPVOID pointer(void);
+      const LPVOID pointer(void) const;
 
       bool hasPool(void) const;
       bool isNull(void) const;
       bool usesPool(const AddressPool *pool) const;
+      bool inRange(void) const;
 
       void throwIfNoPool(void) const;
+      void throwIfNotInRange(void) const;
 
       AddressPool *getPool(void);
       const AddressPool *getPool(void) const;
       void setPool(AddressPool *pool);
       
-      Label label(void) const;
+      virtual Label label(void) const;
       void move(const LPVOID pointer);
       void move(Label newLabel);
       void moveIdentifier(const LPVOID pointer);
@@ -397,5 +402,52 @@ namespace Neurology
 
    protected:
       const Identifier getAssociation(void) const;
+   };
+
+   class Offset : public Address
+   {
+   protected:
+      std::uintptr_t offset;
+
+   public:
+      Offset(void);
+      Offset(const Address &base);
+      Offset(const Address &base, std::uintptr_t offset);
+      Offset(const Offset &offset);
+
+      void operator=(const Offset &offset);
+      void operator=(const Address &address);
+
+      bool operator<(const Offset &offset) const;
+      bool operator>(const Offset &offset) const;
+      bool operator==(const Offset &offset) const;
+      bool operator!=(const Offset &offset) const;
+      bool operator<=(const Offset &offset) const;
+      bool operator>=(const Offset &offset) const;
+
+      Offset operator+(std::intptr_t shift) const;
+      Offset operator+(std::uintptr_t shift) const;
+      Offset operator-(std::intptr_t shift) const;
+      Offset operator-(std::uintptr_t shift) const;
+      std::intptr_t operator-(const Offset &offset) const;
+      Offset &operator+=(std::intptr_t shift);
+      Offset &operator+=(std::uintptr_t shift);
+      Offset &operator-=(std::intptr_t shift);
+      Offset &operator-=(std::uintptr_t shift);
+
+      Address operator*(void);
+      const Address operator*(void) const;
+
+      Address getAddress(void);
+      const Address getAddress(void) const;
+      Address &getBaseAddress(void);
+      const Address &getBaseAddress(void) const;
+      void setAddress(Address &address);
+      std::uintptr_t getOffset(void) const;
+      void setOffset(std::uintptr_t offset);
+
+      virtual Label label(void) const;
+
+      Offset copy(void) const;
    };
 }

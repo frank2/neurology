@@ -313,7 +313,7 @@ AddressPool::setRange
    this->unbindOutOfBounds();
 }
 
-SIZE_T
+std::uintptr_t
 AddressPool::size
 (void) const
 {
@@ -424,7 +424,7 @@ void
 AddressPool::rebase
 (Label newBase)
 {
-   SIZE_T currentSize = this->size();
+   std::uintptr_t currentSize = this->size();
    Label newMax = newBase + currentSize;
    std::intptr_t delta = newBase - this->minLabel;
 
@@ -934,7 +934,7 @@ Address::operator+
 
 Address
 Address::operator+
-(SIZE_T shift) const
+(std::uintptr_t shift) const
 {
    std::uintptr_t newValue = this->label() + shift;
 
@@ -960,7 +960,7 @@ Address::operator-
 
 Address
 Address::operator-
-(SIZE_T shift) const
+(std::uintptr_t shift) const
 {
    std::uintptr_t newValue = this->label() - shift;
 
@@ -995,7 +995,7 @@ Address::operator+=
 
 Address &
 Address::operator+=
-(SIZE_T shift)
+(std::uintptr_t shift)
 {
    std::uintptr_t newValue = this->label() + shift;
 
@@ -1024,7 +1024,7 @@ Address::operator-=
 
 Address &
 Address::operator-=
-(SIZE_T shift)
+(std::uintptr_t shift)
 {
    std::uintptr_t newValue = this->label() - shift;
 
@@ -1033,6 +1033,21 @@ Address::operator-=
 
    this->move(newValue);
    return *this;
+}
+
+LPVOID
+Address::pointer
+(void)
+{
+   return reinterpret_cast<LPVOID>(this->label());
+}
+
+const LPVOID
+Address::pointer
+(void) const
+{
+   return const_cast<const LPVOID>(
+      reinterpret_cast<LPVOID>(this->label()));
 }
 
 bool
@@ -1056,12 +1071,27 @@ Address::usesPool
    return this->pool == pool;
 }
 
+bool
+Address::inRange
+(void) const
+{
+   return this->hasPool() && this->pool->inRange(this->label());
+}
+
 void
 Address::throwIfNoPool
 (void) const
 {
    if (!this->hasPool())
       throw NoPoolException(*const_cast<Address *>(this));
+}
+
+void
+Address::throwIfNotInRange
+(void) const
+{
+   this->throwIfNoPool();
+   this->pool->throwIfNotInRange(this->label());
 }
 
 AddressPool *
@@ -1161,4 +1191,327 @@ Address::getAssociation
    this->throwIfNoPool();
    
    return this->pool->getAssociation(this);
+}
+
+Offset::Offset
+(void)
+   : offset(0)
+{
+}
+
+Offset::Offset
+(const Address &base)
+   : Address(base)
+   , offset(0)
+{
+}
+
+Offset::Offset
+(const Address &base, std::uintptr_t offset)
+   : Address(base)
+   , offset(offset)
+{
+   this->throwIfNotInRange();
+}
+
+Offset::Offset
+(const Offset &offset)
+{
+   *this = offset;
+}
+
+void
+Offset::operator=
+(const Offset &offset)
+{
+   *static_cast<Address *>(this) = *reinterpret_cast<const Address *>(&offset);
+   this->offset = offset.offset;
+}
+
+void
+Offset::operator=
+(const Address &address)
+{
+   *static_cast<Address *>(this) = address;
+   this->offset = 0;
+}
+
+bool
+Offset::operator<
+(const Offset &offset) const
+{
+   return this->label() < offset.label();
+}
+
+bool
+Offset::operator>
+(const Offset &offset) const
+{
+   return offset < *this;
+}
+
+bool
+Offset::operator==
+(const Offset &offset) const
+{
+   return !(*this < offset) && !(offset < *this);
+}
+
+bool
+Offset::operator!=
+(const Offset &offset) const
+{
+   return !(*this == offset);
+}
+
+bool
+Offset::operator<=
+(const Offset &offset) const
+{
+   return *this < offset || *this == offset;
+}
+
+bool
+Offset::operator>=
+(const Offset &offset) const
+{
+   return *this > offset || *this == offset;
+}
+
+Offset
+Offset::operator+
+(std::intptr_t shift) const
+{
+   std::intptr_t newOffset = this->offset + shift;
+
+   if (shift > 0 && newOffset < 0)
+      throw Address::AddressOverflowException(*const_cast<Offset *>(this), shift);
+   if (shift < 0 && newOffset > 0)
+      throw Address::AddressUnderflowException(*const_cast<Offset *>(this), shift);
+
+   if (newOffset < 0)
+      return Offset((*reinterpret_cast<const Address *>(this))+newOffset);
+   else
+      return Offset(reinterpret_cast<const Address *>(this)->copy(), newOffset);
+}
+
+Offset
+Offset::operator+
+(std::uintptr_t shift) const
+{
+   std::uintptr_t newOffset = this->offset + shift;
+
+   if (newOffset < this->offset)
+      throw Address::AddressOverflowException(*const_cast<Offset *>(this), shift);
+
+   return Offset(reinterpret_cast<const Address *>(this)->copy(), newOffset);
+}
+
+Offset
+Offset::operator-
+(std::intptr_t shift) const
+{
+   std::intptr_t newOffset = this->offset - shift;
+
+   if (shift > 0 && newOffset > 0)
+      throw Address::AddressOverflowException(*const_cast<Offset *>(this), shift);
+   if (shift < 0 && newOffset < 0)
+      throw Address::AddressUnderflowException(*const_cast<Offset *>(this), shift);
+
+   if (newOffset < 0)
+      return Offset((*reinterpret_cast<const Address *>(this))+newOffset);
+   else
+      return Offset(reinterpret_cast<const Address *>(this)->copy(), newOffset);
+}
+
+Offset
+Offset::operator-
+(std::uintptr_t shift) const
+{
+   std::intptr_t newOffset = this->offset - shift;
+
+   if (newOffset > this->offset)
+      throw Address::AddressUnderflowException(*const_cast<Offset *>(this), shift);
+
+   if (newOffset < 0)
+      return Offset((*reinterpret_cast<const Address *>(this))+newOffset);
+   else
+      return Offset(reinterpret_cast<const Address *>(this)->copy(), newOffset);
+}
+
+std::intptr_t
+Offset::operator-
+(const Offset &offset) const
+{
+   return this->label() - offset.label();
+}
+
+Offset &
+Offset::operator+=
+(std::intptr_t shift)
+{
+   std::intptr_t newOffset = this->offset + shift;
+
+   if (shift > 0 && newOffset < 0)
+      throw Address::AddressOverflowException(*const_cast<Offset *>(this), shift);
+   if (shift < 0 && newOffset > 0)
+      throw Address::AddressUnderflowException(*const_cast<Offset *>(this), shift);
+
+   if (newOffset < 0)
+   {
+      const Address *self = reinterpret_cast<const Address *>(this);
+      this->move((*self+newOffset).label());
+      this->offset = 0;
+   }
+   else
+   {
+      this->offset = newOffset;
+      this->throwIfNotInRange();
+   }
+
+   return *this;
+}
+
+Offset &
+Offset::operator+=
+(std::uintptr_t shift)
+{
+   std::uintptr_t newOffset = this->offset + shift;
+
+   if (newOffset < this->offset)
+      throw Address::AddressOverflowException(*const_cast<Offset *>(this), shift);
+
+   this->offset = newOffset;
+   this->throwIfNotInRange();
+
+   return *this;
+}
+
+Offset &
+Offset::operator-=
+(std::intptr_t shift)
+{
+   std::intptr_t newOffset = this->offset - shift;
+
+   if (shift > 0 && newOffset > 0)
+      throw Address::AddressOverflowException(*const_cast<Offset *>(this), shift);
+   if (shift < 0 && newOffset < 0)
+      throw Address::AddressUnderflowException(*const_cast<Offset *>(this), shift);
+
+   if (newOffset < 0)
+   {
+      const Address *self = reinterpret_cast<const Address *>(this);
+      this->move((*self+newOffset).label());
+      this->offset = 0;
+   }
+   else
+   {
+      this->offset = newOffset;
+      this->throwIfNotInRange();
+   }
+
+   return *this;
+}
+
+Offset &
+Offset::operator-=
+(std::uintptr_t shift)
+{
+   std::intptr_t newOffset = this->offset - shift;
+
+   if (newOffset > this->offset)
+      throw Address::AddressUnderflowException(*const_cast<Offset *>(this), shift);
+
+   if (newOffset < 0)
+   {
+      const Address *self = reinterpret_cast<const Address *>(this);
+      this->move((*self+newOffset).label());
+      this->offset = 0;
+   }
+   else
+   {
+      this->offset = newOffset;
+      this->throwIfNotInRange();
+   }
+
+   return *this;
+}
+
+Address
+Offset::operator*
+(void)
+{
+   return this->getAddress();
+}
+
+const Address
+Offset::operator*
+(void) const
+{
+   return this->getAddress();
+}
+
+Address
+Offset::getAddress
+(void)
+{
+   this->throwIfNoPool();
+
+   return this->pool->address(this->label());
+}
+
+const Address
+Offset::getAddress
+(void) const
+{
+   this->throwIfNoPool();
+
+   return this->pool->address(this->label());
+}
+
+Address &
+Offset::getBaseAddress
+(void)
+{
+   return *static_cast<Address *>(this);
+}
+
+const Address &
+Offset::getBaseAddress
+(void) const
+{
+   return *reinterpret_cast<const Address *>(this);
+}
+
+void
+Offset::setAddress
+(Address &address)
+{
+   *static_cast<Address *>(this) = address;
+}
+
+std::uintptr_t
+Offset::getOffset(void) const
+{
+   return this->offset;
+}
+
+void
+Offset::setOffset(std::uintptr_t offset)
+{
+   this->offset = offset;
+}
+
+Label
+Offset::label
+(void) const
+{
+   return Address::label() + this->offset;
+}
+
+Offset
+Offset::copy
+(void) const
+{
+   return Offset(*const_cast<Address *>(reinterpret_cast<const Address *>(this)), this->offset);
 }
