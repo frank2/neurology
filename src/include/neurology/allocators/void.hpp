@@ -116,14 +116,20 @@ namespace Neurology
       typedef std::map<Address, AddressPool *> AddressPoolMap;
       typedef std::map<Allocation *, Address> AssociationMap;
       typedef std::map<Address, std::set<Allocation *> > BindingMap;
+      typedef std::map<Allocation *, std::set<Allocation *> > ChildMap;
+      typedef std::map<Allocation *, Allocation *> ParentMap;
       
    protected:
       bool split;
+      bool local;
+      
       AddressPool pooledAddresses;
       MemoryPool pooledMemory;
       AddressPoolMap addressPools;
       AssociationMap associations;
       BindingMap bindings;
+      ChildMap children;
+      ParentMap parents;
 
    public:
       Allocator(void);
@@ -134,11 +140,16 @@ namespace Neurology
       void denySplitting(void);
       bool splits(void) const;
 
+      bool isLocal(void) const;
+
       bool isPooled(const Address &address) const;
       bool isAssociated(const Allocation &allocation) const;
       bool isBound(const Allocation &allocation) const;
       bool hasAddress(const Address &address) const;
       bool willSplit(const Address &address, SIZE_T size) const;
+      bool hasParent(const Allocation &allocation) const;
+      bool hasChildren(const Allocation &allocation) const;
+      bool isChild(const Allocation &parent, const Allocation &child) const;
 
       void throwIfNotPooled(const Address &address) const;
       void throwIfNotAssociated(const Allocation &allocation) const;
@@ -196,6 +207,9 @@ namespace Neurology
 
       Data read(const Address &address, SIZE_T size) const;
       void write(const Address &address, const Data data);
+
+      Allocation &parent(const Allocation &allocation);
+      std::set<const Allocation *> children(const Allocation &allocation);
       
    protected:
       virtual Address poolAddress(SIZE_T size);
@@ -220,6 +234,8 @@ namespace Neurology
       /* overloadable functions for writing to/from addresses themselves */
       virtual Data readAddress(const Address &address, SIZE_T size) const;
       virtual void writeAddress(const Address &destination, const Data data);
+
+      Allocation spawn(const Allocation *allocation, Address &address, SIZE_T size);
    };
    
    class Allocation
@@ -305,6 +321,7 @@ namespace Neurology
       bool isNull(void) const;
       bool isBound(void) const;
       bool isValid(void) const;
+      bool isLocal(void) const;
       bool allocatedFrom(const Allocator *allocator) const;
       bool inRange(SIZE_T offset) const;
       bool inRange(SIZE_T offset, SIZE_T size) const;
@@ -349,5 +366,10 @@ namespace Neurology
 
       void copy(Allocation &allocation);
       void clone(const Allocation &allocation);
+
+      Allocation &slice(const Address &address, SIZE_T size);
+
+      Allocation &parent(void) const;
+      std::set<const Allocation *> children(void) const;
    };
 }

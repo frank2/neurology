@@ -85,12 +85,14 @@ Allocator::SplitsExceededException::SplitsExceededException
 Allocator::Allocator
 (void)
    : split(true)
+   , local(false)
 {
 }
 
 Allocator::Allocator
 (bool split)
    : split(split)
+   , local(false)
 {
 }
 
@@ -147,6 +149,13 @@ Allocator::splits
 (void) const
 {
    return this->split;
+}
+
+bool
+Allocator::isLocal
+(void) const
+{
+   return this->local;
 }
 
 bool
@@ -219,6 +228,21 @@ Allocator::willSplit
    /* return the determination of whether or not this has one or more splits */
    return poolIter != this->pooledMemory.end() && endAddr == poolIter->first;
 }
+
+bool
+Allocator::hasParent
+(const Allocation &allocation) const
+{
+   return this->parents.count(&allocation) > 0;
+}
+
+bool
+Allocator::isChild
+(const Allocation &parent, const Allocation &child) const
+{
+   return this->hasParent(child) && this->children.at(&parent).find(const_cast<Allocation *>(&child)) != this->children.end();
+}
+
 void
 Allocator::throwIfNotPooled
 (const Address &address) const
@@ -520,6 +544,25 @@ Allocator::write
       return this->write(&this->find(address), address, data);
 }
 
+Allocation &
+Allocator::parent
+(const Allocation &allocation)
+{
+   this->throwIfNoParent(allocation);
+
+   return this->parents.at(&allocation);
+}
+
+std::set<const Allocation *>
+Allocator::children
+(const Allocation &allocation)
+{
+   this->throwIfNoParent(allocation);
+
+   return std::set<const Allocation *>(this->children.at(&allocation).begin()
+                                       ,this->children.at(&allocation).end());
+}
+
 Address
 Allocator::poolAddress
 (SIZE_T size)
@@ -553,8 +596,22 @@ void
 Allocator::reallocate
 (Allocation *allocation, SIZE_T size)
 {
+   this->throwIfNotBound(*allocation);
+   
    /* repooling should automatically rebind the underlying allocations */
-   this->repool(allocation->address(), size);
+   if (!this->hasParent(*allocation))
+      this->repool(allocation->address(), size);
+   else
+   {
+      /* the allocation has children, which means we need to figure out which
+         children are still alive and which children are not.
+
+         * if old < new, children are fine
+         * if new < old, search children
+         * calculate child->end().label() + delta
+         * if it's less than child->start(), it has been deleted
+         * if it's greater than child->start(), it has been resized */
+   }
 }
 
 void
@@ -596,13 +653,20 @@ Allocator::rebind
 (Allocation *allocation, const Address &newAddress)
 {
    Address oldAddress, localNewAddress;
+   std::intptr_t delta;
    
    if (!this->isBound(*allocation))
       return this->bind(allocation, newAddress);
 
    this->throwIfNotAssociated(*allocation);
-   this->throwIfNotPooled(allocation->address());
-   this->throwIfNotPooled(newAddress);
+
+   if (!this->hasParent(*allocation))
+   {
+      this->throwIfNotPooled(allocation->address());
+      this->throwIfNotPooled(newAddress);
+   }
+   else
+      this->throwIfNoAllocation(newAddress);
 
    if (newAddress.usesPool(&this->pooledAddresses))
       localNewAddress = newAddress;
@@ -613,13 +677,29 @@ Allocator::rebind
       this->bindings[localNewAddress] = std::set<Allocation *>();
    
    oldAddress = this->associations[allocation];
+   delta = localNewAddress - oldAddress;
+   
+   this->addressPools[oldAddress].rebase(localNewAddress);
    this->bindings[localNewAddress].insert(allocation);
    this->bindings[oldAddress].erase(allocation);
 
    allocation->allocator = this;
    this->associations[allocation] = newAddress;
+   
+   if (this->hasChildren(*allocation))
+   {
+      ChildMap::iterator childIter;
 
-   if (this->bindings[oldAddress].size() == 0)
+      for (childIter = this->children.at(*allocation).begin();
+           childIter != this->children.at(*allocation).end();
+           ++childIter)
+      {
+         this->rebind(*childIter
+                      ,this->associations.at(*childIter) + delta);
+      }
+   }
+
+   if (this->bindings[oldAddress].size())
    {
       this->bindings.erase(oldAddress);
       this->unpool(oldAddress);
