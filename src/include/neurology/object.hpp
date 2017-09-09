@@ -19,7 +19,7 @@ namespace Neurology
                                         ,Type *
                                         ,Type>::type BaseType;
       typedef BaseType *PointedType;
-      typedef typename std::remove_pointer<Type>::type UnpointedType;
+      typedef typename std::remove_pointer<BaseType>::type UnpointedType;
       typedef typename std::remove_all_extents<BaseType>::type NoExtentType
       typedef typename std::remove_extent<BaseType>::type ParentExtentType;
       
@@ -65,11 +65,20 @@ namespace Neurology
    protected:
       Allocator *allocator;
       Allocation allocation;
-      Offset allocationOffset;
       Data cache;
       bool built;
       bool cached;
       bool autoflush;
+
+      Object(Allocator *allocator, Allocation allocation, Data cache, bool built, bool cached, bool autoflush)
+         : allocator(allocator)
+         , allocation(allocation)
+         , cache(cache)
+         , built(built)
+         , cached(cached)
+         , autoflush(autoflush)
+      {
+      }
 
    public:
       Object(void)
@@ -167,27 +176,29 @@ namespace Neurology
          return this->pointer();
       }
 
-      /* hi welcome to hell, we'll start with the fourth layer, which is an
+      /* hi welcome to hell, we'll start with the third layer, which is an
          array of arrays */
       typename std::enable_if<std::is_array<ParentExtentType>::value
                               ,Object<ParentExtentType> >::type
       operator[] (unsigned int index)
       {
-         Object<ParentExtentType> result;
-         SIZE_T parentExSize = sizeof(ParentExtentType);
+         SIZE_T size = sizeof(ParentExtentType);
+         Address slicePoint;
+         Data cache;
 
          this->allocation.throwIfInvalid();
 
-         result.allocation = this->allocation;
-         result.offset = Offset(this->offset.address(), parentExSize*index);
-         result.cached = this->cached;
-         result.autoflush = this->autoflush;
-         result.built = this->built;
+         slicePoint = this->allocation.address(size*index);
 
          if (this->cached)
-            result.cache = this->allocation.read(result.offset.address(), parentExSize);
+            cache = this->allocation.read(slicePoint, sizeof(ParentExtentType));
 
-         return result;
+         return Object<ParentExtentType>(this->allocator
+                                         ,this->allocation.slice(this->allocation.address(size*index))
+                                         ,cache
+                                         ,this->built
+                                         ,this->cached
+                                         ,this->autoflush);
       }
 
       /* the next layer is an array to the base object */
@@ -195,62 +206,51 @@ namespace Neurology
                               ,Object<NoExtentType> >::type
       operator[] (unsigned int index)
       {
-         Object<NoExtentType> result;
-         SIZE_T noExSize = sizeof(NoExtentType);
+         SIZE_T size = sizeof(NoExtentType);
+         Address slicePoint;
+         Data cache;
 
          this->allocation.throwIfInvalid();
 
-         result.allocation = this->allocation;
-         result.offset = Offset(this->offset.address(), noExSize*index);
-         result.cached = this->cached;
-         result.autoflush = this->autoflush;
-         result.built = this->built;
+         slicePoint = this->allocation.address(size*index);
 
          if (this->cached)
-            result.cache = this->allocation.read(result.offset.address(), noExSize);
+            cache = this->allocation.read(slicePoint, sizeof(NoExtentType));
+
+         return Object<NoExtentType>(this->allocator
+                                         ,this->allocation.slice(this->allocation.address(size*index))
+                                         ,cache
+                                         ,this->built
+                                         ,this->cached
+                                         ,this->autoflush);
       }
 
-      /* the next layer is pointer scripting where the pointer is another pointer
-         P O I N T C E P T I O N */
-      typename std::enable_if<std::is_pointer<UnpointedType>::value
+      /* the next layer is pointer arithmetic via array subscripting */
+      typename std::enable_if<!std::is_array<UnpointedType>::value &&
+                              (std::is_pointer<UnpointedType>::value ||
+                               (std::is_pointer<BaseType>::value &&
+                                !std::is_pointer<UnpointedType>::value &&
+                                !std::is_void<UnpointedType>::value))
                               ,Object<UnpointedType> >::type
       operator[] (unsinged int index)
       {
-         Object<UnpointedType> result;
          SIZE_T size = sizeof(UnpointedType);
+         Address slicePoint;
+         Data cache;
 
          this->allocation.throwIfInvalid();
 
-         result.allocation = this->allocation;
-         result.offset = Offset(this->offset.address(), size*index);
-         result.cached = this->cached;
-         result.autoflush = this->autoflush;
-         result.built = this->built;
+         slicePoint = this->allocation.address(size*index);
 
          if (this->cached)
-            result.cache = this->allocation.read(result.offset.address(), size);
-      }
+            cache = this->allocation.read(slicePoint, sizeof(UnpointedType));
 
-      /* the final layer is pointer arithmetic via array subscripting */
-      typename std::enable_if<std::is_pointer<BaseType>::value &&
-                              !std::is_pointer<UnpointedType>::value &&
-                              !std::is_void<UnpointedType>::value
-                              ,Object<UnpointedType> >::type
-      operator[] (unsigned int index)
-      {
-         Object<UnpointedType> result;
-         SIZE_T size = sizeof(UnpointedType);
-
-         this->allocation.throwIfInvalid();
-
-         result.allocation = this->allocation;
-         result.offset = Offset(this->offset.address(), size*index);
-         result.cached = this->cached;
-         result.autoflush = this->autoflush;
-         result.built = this->built;
-
-         if (this->cached)
-            result.cache = this->allocation.read(result.offset.address(), size);
+         return Object<UnpointedType>(this->allocator
+                                         ,this->allocation.slice(this->allocation.address(size*index))
+                                         ,cache
+                                         ,this->built
+                                         ,this->cached
+                                         ,this->autoflush);
       }
 
       bool isBuilt(void) const
@@ -384,6 +384,12 @@ namespace Neurology
          return reinterpret_cast<PointedType>(this->cache.data());
       }
 
+      virtual typename std::enable_if<std::is_pointer<BaseType>::value
+                                      ,Object<BaseType> >::type
+      pointer(void)
+      {
+         
+
       virtual const PointedType pointer(void) const
       {
          if (!this->cached)
@@ -441,6 +447,10 @@ namespace Neurology
          
          if (this->built)
             throw AlreadyConstructedException(*this);
+
+         /* perhaps you are constructing this prior to allocating it */
+         if (!this->allocation.isValid())
+            this->allocate();
          
          new(this->pointer()) BaseType(args...);
          this->built = true;
@@ -460,7 +470,11 @@ namespace Neurology
          this->cache.empty();
       }
 
-   protected:
+      void allocate(void)
+      {
+         this->allocate(sizeof(BaseType));
+      }
+
       void allocate(SIZE_T size)
       {
          this->allocation = this->allocator->allocate(size);
@@ -474,8 +488,6 @@ namespace Neurology
             return this->allocate(size);
 
          this->allocation.reallocate(size);
-         this->offset.setAddress(this->allocation.address());
-         this->offset.setOffset(0);
       }
    };
 }
