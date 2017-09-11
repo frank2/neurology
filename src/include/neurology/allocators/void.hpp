@@ -209,6 +209,7 @@ namespace Neurology
       void write(const Address &address, const Data data);
 
       Allocation &parent(const Allocation &allocation);
+      const Allocation &parent(const Allocation &allocation) const;
       std::set<const Allocation *> children(const Allocation &allocation);
       
    protected:
@@ -224,6 +225,9 @@ namespace Neurology
       void rebind(Allocation *allocation, const Address &newAddress);
       void unbind(Allocation *allocation);
 
+      void addChild(Allocation *parent, Allocation *child);
+      void disownChild(Allocation *child);
+
       Data splitRead(const Address &startAddress, SIZE_T size) const;
       void splitWrite(const Address &destination, const Data data);
 
@@ -235,7 +239,7 @@ namespace Neurology
       virtual Data readAddress(const Address &address, SIZE_T size) const;
       virtual void writeAddress(const Address &destination, const Data data);
 
-      Allocation spawn(const Allocation *allocation, Address &address, SIZE_T size);
+      Allocation spawn(const Allocation *allocation, const Address &address, SIZE_T size);
    };
    
    class Allocation
@@ -317,6 +321,7 @@ namespace Neurology
       void operator=(const Allocation *allocation);
       Address operator*(void);
       const Address operator*(void) const;
+      Allocation operator[](const Address &start, const Address &end);
 
       bool isNull(void) const;
       bool isBound(void) const;
@@ -367,9 +372,10 @@ namespace Neurology
       void copy(Allocation &allocation);
       void clone(const Allocation &allocation);
 
-      Allocation &slice(const Address &address, SIZE_T size);
+      Allocation slice(const Address &address, SIZE_T size);
 
-      Allocation &parent(void) const;
+      Allocation &parent(void);
+      const Allocation &parent(void) const;
       std::set<const Allocation *> children(void) const;
    };
 }

@@ -365,7 +365,12 @@ Address
 Allocator::pool
 (SIZE_T size)
 {
-   Address address = this->poolAddress(size);
+   Address address;
+
+   if (size == 0)
+      throw ZeroSizeException(*this);
+   
+   address = this->poolAddress(size);
    this->pooledMemory[address] = size;
    this->addressPools[address] = new AddressPool(address.label(), (address+size).label());
 
@@ -380,6 +385,9 @@ Allocator::repool
 
    this->throwIfNotPooled(address);
 
+   if (newSize == 0)
+      throw ZeroSizeException(*this);
+
    newAddress = this->repoolAddress(address, newSize);
    this->pooledMemory[newAddress] = newSize;
 
@@ -392,15 +400,20 @@ Allocator::repool
    if (baseAddress == newAddress)
    {
       this->addressPools[baseAddress]->setMax((newAddress+newSize).label());
-      return address;
+      return baseAddress;
    }
 
+   /* why did you give us a pool address that's already allocated but wasn't our
+      original address? that's weird. */
+   if (this->bindings.count(newAddress) > 0)
+      throw PoolCollisionException(*this, newAddress);
+
    /* otherwise, we're on clean-up duty. */
-   this->addressPools[newAddress] = new AddressPool();
+   this->addressPools[newAddress] = new AddressPool;
    this->addressPools[baseAddress]->drain(*this->addressPools[newAddress]);
    
    this->addressPools[newAddress]->rebase(newAddress.label());
-   this->addressPools[newAddress]->setMax((address+newSize).label());
+   this->addressPools[newAddress]->setMax((newAddress+newSize).label());
 
    if (this->bindings.count(baseAddress) > 0)
    {
@@ -489,29 +502,22 @@ Allocator::allocate
 (SIZE_T size)
 {
    Allocation newAllocation = this->null();
-   newAllocation.allocate(size);
-   return newAllocation;
+   return this->allocate(&newAllocation, size);
 }
 
 void
 Allocator::reallocate
 (const Allocation &allocation, SIZE_T size)
 {
-   this->throwIfNotAssociated(allocation);
-   this->throwIfNotPooled(allocation.baseAddress());
-
-   /* calling repool on the underlying address will rebind all allocations automatically. */
-   this->repool(Address(allocation.baseAddress().label()), size);
+   /* just call the protected reallocation function */
+   this->reallocate(&allocation, size)
 }
 
 void
 Allocator::deallocate
 (Allocation &allocation)
 {
-   this->throwIfNotAssociated(allocation);
-   this->throwIfNotPooled(allocation.baseAddress());
-
-   this->unpool(Address(allocation.baseAddress().label()));
+   this->deallocate(&allocation)
 }
 
 Data
@@ -553,11 +559,23 @@ Allocator::parent
    return this->parents.at(&allocation);
 }
 
+const Allocation &
+Allocator::parent
+(const Allocation &allocation) const
+{
+   this->throwIfNoParent(allocation);
+
+   return this->parents.at(&allocation);
+}
+
 std::set<const Allocation *>
 Allocator::children
 (const Allocation &allocation)
 {
    this->throwIfNoParent(allocation);
+
+   if (!this->hasChildren(allocation))
+      return std::set<const Allocation *>();
 
    return std::set<const Allocation *>(this->children.at(&allocation).begin()
                                        ,this->children.at(&allocation).end());
@@ -596,21 +614,51 @@ void
 Allocator::reallocate
 (Allocation *allocation, SIZE_T size)
 {
+   std::intptr_t paternalDelta;
+   Label paternalEnd;
+   
    this->throwIfNotBound(*allocation);
    
-   /* repooling should automatically rebind the underlying allocations */
+   /* repooling should automatically rebind and resize the underlying allocations,
+      but is only applicable to orphan allocations */
    if (!this->hasParent(*allocation))
-      this->repool(allocation->address(), size);
-   else
    {
-      /* the allocation has children, which means we need to figure out which
-         children are still alive and which children are not.
+      this->repool(this->associations.at(allocation), size);
+      return;
+   }
 
-         * if old < new, children are fine
-         * if new < old, search children
-         * calculate child->end().label() + delta
-         * if it's less than child->start(), it has been deleted
-         * if it's greater than child->start(), it has been resized */
+   if (size == 0)
+      throw ZeroSizeException(*this);
+
+   paternalDelta = size - allocation->size();
+   paternalEnd = allocation->end().label() + paternalDelta;
+
+   /* since we won't be doing any technical allocation now, we need to figure out
+      which children are still alive and which children are not.
+
+      * if old < new, children are fine and nothing needs to happen
+      * if new < old, search children
+      * calculate child->end().label() + delta
+      * if it's less than child->start(), it has been deleted
+      * if it's greater than child->start(), it has been resized */
+   if (this->chidlren.count(allocation) > 0 && paternalEnd < allocation->end())
+   {
+      std::set<Allocation *>::iterator childIter;
+      std::vector<Allocation *> deadChildren;
+      std::vector<Allocation *>::iterator deadIter;
+
+      for (childIter=this->children.at(allocation).begin();
+           childIter!=this->children.at(allocation).end();
+           ++childIter)
+      {
+         if (*childIter->begin() >= paternalEnd)
+            deadChildren.push_back(*childIter);
+         else if (*childIter->end() > paternalEnd)
+            this->addressPools.at(*childIter)->setMax(paternalEnd);
+      }
+
+      for (deadIter=deadChildren.begin(); deadIter!=deadChildren.end(); ++deadIter)
+         this->disownChild(*deadIter);
    }
 }
 
@@ -625,12 +673,22 @@ void
 Allocator::bind
 (Allocation *allocation, const Address &address)
 {
+   std::intptr_t allocationSize;
    Address localAddress;
-   
-   this->throwIfNotPooled(address);
+
+   if (!this->hasParent(*allocation))
+      this->throwIfNotPooled(address);
+
    this->throwIfBound(*allocation);
 
-   if (address.usesPool(&this->pooledAddresses))
+   if (this->hasParent(*allocation))
+   {
+      if (address.usesPool(this->addressPools.at(allocation->address())))
+         localAddress = address;
+      else
+         localAddress = this->addressPools.at(allocation->address())->address(address.label());
+   }
+   else if (address.usesPool(&this->pooledAddresses))
       localAddress = address;
    else
       localAddress = this->pooledAddresses.address(address.label());
@@ -641,9 +699,13 @@ Allocator::bind
    this->bindings[localAddress].insert(allocation);
    allocation->allocator = this;
 
-   if (this->addressPools.count(address) == 0)
+   /* if we don't have an address pool, we're probably pooled memory. if we're not,
+      that's an exception. */
+   if (this->addressPools.count(address) == 0 && this->isPooled(address))
       this->addressPools[localAddress] = new AddressPool(localAddress.label()
-                                                         ,(localAddress+this->pooledMemory[localAddress]).label());
+                                                         ,localAddress.label() + this->pooledMemory[address]);
+   else if (this->addressPools.count(address) == 0 && !this->isPooled(address))
+      throw UnpooledAddressException(*this, address);
 
    this->associations[allocation] = localAddress;
 }
@@ -653,6 +715,7 @@ Allocator::rebind
 (Allocation *allocation, const Address &newAddress)
 {
    Address oldAddress, localNewAddress;
+   SIZE_T bindCount;
    std::intptr_t delta;
    
    if (!this->isBound(*allocation))
@@ -661,14 +724,16 @@ Allocator::rebind
    this->throwIfNotAssociated(*allocation);
 
    if (!this->hasParent(*allocation))
-   {
-      this->throwIfNotPooled(allocation->address());
       this->throwIfNotPooled(newAddress);
-   }
-   else
-      this->throwIfNoAllocation(newAddress);
 
-   if (newAddress.usesPool(&this->pooledAddresses))
+   if (this->hasParent(*allocation))
+   {
+      if (address.usesPool(this->addressPools.at(allocation->address())))
+         localNewAddress = newAddress;
+      else
+         localNewAddress = this->addressPools.at(allocation->address())->address(newAddress.label());
+   }
+   else if (address.usesPool(&this->pooledAddresses))
       localNewAddress = newAddress;
    else
       localNewAddress = this->pooledAddresses.address(newAddress.label());
@@ -679,12 +744,15 @@ Allocator::rebind
    oldAddress = this->associations[allocation];
    delta = localNewAddress - oldAddress;
    
-   this->addressPools[oldAddress].rebase(localNewAddress);
    this->bindings[localNewAddress].insert(allocation);
    this->bindings[oldAddress].erase(allocation);
+   bindCount = this->bindings[oldAddress].size();
 
-   allocation->allocator = this;
-   this->associations[allocation] = newAddress;
+   if (this->addressPools.count(localNewAddress) == 0)
+      this->addressPools[localNewAddress] = new AddressPool(localNewAddress.label()
+                                                            ,localNewAddress.label() + allocation->size());
+
+   this->associations[allocation] = localNewAddress;
    
    if (this->hasChildren(*allocation))
    {
@@ -695,7 +763,7 @@ Allocator::rebind
            ++childIter)
       {
          this->rebind(*childIter
-                      ,this->associations.at(*childIter) + delta);
+                      ,Address(this->associations.at(*childIter).label() + delta));
       }
    }
 
@@ -714,9 +782,22 @@ Allocator::unbind
 (Allocation *allocation)
 {
    Address boundAddress;
+   Allocation *parent;
    
    this->throwIfNotBound(*allocation);
-   this->throwIfNotPooled(allocation->baseAddress());
+
+   if (!this->hasParent(*allocation))
+      this->throwIfNotPooled(allocation->baseAddress());
+   else
+      this->abandonParent(allocation);
+   
+   if (this->children.count(allocation) > 0)
+   {
+      std::set<Allocation *>::iterator childIter;
+
+      while ((childIter=this->children.at(allocation).begin()) != this->children.at(allocation).end())
+         this->unbind(*childIter);
+   }
 
    boundAddress = this->associations[allocation];
 
@@ -725,11 +806,43 @@ Allocator::unbind
    
    if (this->bindings[boundAddress].size() != 0)
       return;
-
+   
    this->bindings.erase(boundAddress);
       
    if (this->isPooled(boundAddress))
       this->unpool(boundAddress);
+}
+
+void
+Allocator::addChild
+(Allocation *parent, Allocation *child)
+{
+   this->throwIfNotBound(*parent);
+
+   this->parents[child] = parent;
+
+   if (this->children.count(parent) == 0)
+      this->children[parent] = std::set<Allocation *>();
+
+   this->children[parent].insert(child);
+}
+
+void
+Allocator::disownChild
+(Allocation *child)
+{
+   Allocation *parent;
+   
+   this->throwIfNoParent(*child);
+
+   parent = this->parents[child];
+
+   this->children[parent].erase(child);
+
+   if (this->children[parent].size() == 0)
+      this->children.erase(parent);
+
+   this->parents.erase(child);
 }
 
 Data
@@ -897,6 +1010,28 @@ Allocator::writeAddress
    throw VoidAllocatorException(*this);
 }
 
+Allocation
+Allocator::spawn
+(const Allocation *allocation, const Address &address, SIZE_T size)
+{
+   Allocation newAllocation;
+   Address baseAddress;
+   
+   allocation->throwIfNotInRange(address, size);
+
+   newAllocation = this->null();
+   baseAddress = allocation->address(address.label());
+   this->addChild(const_cast<Allocation *>(allocation), &newAllocation);
+
+   if (this->addressPools.count(baseAddress) == 0)
+      this->addressPools[baseAddress] = new AddressPool(baseAddress.label()
+                                                        ,baseAddress.label()+size);
+
+   this->bind(&newAllocation, baseAddress);
+
+   return newAllocation;
+}
+
 Allocation::Exception::Exception
 (const Allocation &allocation, const LPWSTR message)
    : Neurology::Exception(message)
@@ -1060,6 +1195,13 @@ Allocation::isValid
 (void) const
 {
    return this->isBound() && this->allocator->isPooled(this->allocator->addressOf(*this));
+}
+
+bool
+Allocation::isLocal
+(void) const
+{
+   return this->allocator != NULL && this->allocator->isLocal();
 }
 
 bool
@@ -1438,4 +1580,40 @@ Allocation::clone
       this->reallocate(allocation.size());
 
    this->write(allocation.read());
+}
+
+Allocation 
+Allocation::slice
+(const Address &address, SIZE_T size)
+{
+   this->throwIfInvalid();
+
+   return this->allocator->spawn(this, address, size);
+}
+
+Allocation &
+Allocation::parent
+(void)
+{
+   this->throwIfInvalid();
+
+   return this->allocator->parent(*this);
+}
+
+const Allocation &
+Allocation::parent
+(void) const
+{
+   this->throwIfInvalid();
+
+   return this->allocator->parent(*this);
+}
+
+std::set<const Allocation *>
+Allocation::children
+(void) const
+{
+   this->throwIfInvalid();
+
+   return this->allocator->children(*this);
 }
