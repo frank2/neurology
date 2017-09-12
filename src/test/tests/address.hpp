@@ -15,5 +15,9 @@ namespace NeurologyTest
       AddressTest();
 
       virtual void run(std::vector<TestFailure> *failures);
+
+   protected:
+      void testAddress(std::vector<TestFailure> *failures);
+      void testAddressPool(std::vector<TestFailure> *failures);
    };
 }

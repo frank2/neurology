@@ -47,7 +47,7 @@ public:
             struct
             {
                std::uint8_t value;
-               std::uint8_t __padding[7];
+               std::uint8_t padding[7];
             };
             std::uint8_t bytes[8];
          };
@@ -129,6 +129,7 @@ namespace Neurology
 
       if you've gone this far in the code, hey, congrats, welcome to the darkness,
       I'll be your angler fish. but it's very likely you didn't mean to go this far.
+
       check out <neurology/pointer.hpp>.
    */
    class Address;
@@ -255,14 +256,15 @@ namespace Neurology
 
       bool hasLabel(const LPVOID pointer) const;
       bool hasLabel(Label label) const;
-      bool isAssociated(const Address *address) const;
-      bool isBound(const Address *address) const;
+      bool isAssociated(const Address &address) const;
+      bool isBound(const Address &address) const;
       bool inRange(Label label) const;
+      bool sharesIdentifier(const Address &first, const Address &second) const;
 
       void throwIfNoLabel(const LPVOID pointer) const;
       void throwIfNoLabel(Label label) const;
-      void throwIfNotAssociated(const Address *address) const;
-      void throwIfNotBound(const Address *address) const;
+      void throwIfNotAssociated(const Address &address) const;
+      void throwIfNotBound(const Address &address) const;
       void throwIfNotInRange(Label label) const;
 
       Label minimum(void) const;
@@ -270,6 +272,7 @@ namespace Neurology
       std::pair<Label, Label> range(void) const;
       void setMin(Label label);
       void setMax(Label label);
+      void setRange(Label minLabel, Label maxLabel);
       void setRange(std::pair<Label, Label> range);
       std::uintptr_t size(void) const;
       
@@ -278,10 +281,10 @@ namespace Neurology
       Address newAddress(const LPVOID pointer);
       Address newAddress(Label label);
 
-      Label getLabel(const Address *address) const;
+      Label getLabel(const Address &address) const;
 
-      void move(const Address *address, const LPVOID pointer);
-      void move(const Address *address, Label label);
+      void move(const Address &address, const LPVOID pointer);
+      void move(const Address &address, Label label);
       void move(Label priorLabel, Label newLabel);
       void shift(std::intptr_t shift);
       void rebase(Label newBase);
@@ -389,6 +392,7 @@ namespace Neurology
       bool isNull(void) const;
       bool usesPool(const AddressPool *pool) const;
       bool inRange(void) const;
+      bool sharesIdentifier(const Address &address) const;
 
       void throwIfNoPool(void) const;
       void throwIfNotInRange(void) const;

@@ -154,7 +154,8 @@ AddressPool::drain
         iter!=this->associations.end();
         ++iter)
    {
-      iter->first->setPool(&targetPool);
+      /* do this in lieu of setPool to avoid rebinding */
+      iter->first->pool = &targetPool;
    }
 }
 
@@ -187,14 +188,14 @@ AddressPool::hasLabel
 
 bool
 AddressPool::isAssociated
-(const Address *address) const
+(const Address &address) const
 {
-   return this->associations.find(const_cast<Address *>(address)) != this->associations.end();
+   return this->associations.find(const_cast<Address *>(&address)) != this->associations.end();
 }
 
 bool
 AddressPool::isBound
-(const Address *address) const
+(const Address &address) const
 {
    AssociationMap::const_iterator assocIter;
    BindingMap::const_iterator bindingIter;
@@ -203,7 +204,7 @@ AddressPool::isBound
       return false;
 
    /* I hate how the STL doesn't adhere to const correctness arbitrarily... */
-   assocIter = this->associations.find(const_cast<Address *>(address));
+   assocIter = this->associations.find(const_cast<Address *>(&address));
    bindingIter = this->bindings.find(assocIter->second);
 
    if (bindingIter == this->bindings.end())
@@ -217,6 +218,16 @@ AddressPool::inRange
 (Label label) const
 {
    return label >= this->minLabel && label <= this->maxLabel;
+}
+
+bool
+AddressPool::sharesIdentifier
+(const Address &first, const Address &second) const
+{
+   if (!this->isAssociated(first) || !this->isAssociated(second))
+      return false;
+
+   return this->getAssociation(&first) == this->getAssociation(&second);
 }
 
 void
@@ -236,18 +247,18 @@ AddressPool::throwIfNoLabel
 
 void
 AddressPool::throwIfNotAssociated
-(const Address *address) const
+(const Address &address) const
 {
    if (!this->isAssociated(address))
-      throw AddressNotAssociatedException(*const_cast<AddressPool *>(this), *const_cast<Address *>(address));
+      throw AddressNotAssociatedException(*const_cast<AddressPool *>(this), const_cast<Address &>(address));
 }
 
 void
 AddressPool::throwIfNotBound
-(const Address *address) const
+(const Address &address) const
 {
    if (!this->isBound(address))
-      throw AddressNotBoundException(*const_cast<AddressPool *>(this), *const_cast<Address *>(address));
+      throw AddressNotBoundException(*const_cast<AddressPool *>(this), const_cast<Address &>(address));
 }
 
 void
@@ -299,6 +310,13 @@ AddressPool::setMax
 
    this->maxLabel = label;
    this->unbindOutOfBounds();
+}
+
+void
+AddressPool::setRange
+(Label minLabel, Label maxLabel)
+{
+   this->setRange(std::pair<Label,Label>(minLabel, maxLabel));
 }
 
 void
@@ -355,32 +373,32 @@ AddressPool::newAddress
 
 Label
 AddressPool::getLabel
-(const Address *address) const
+(const Address &address) const
 {
    this->throwIfNotAssociated(address);
 
    /* why the STL won't have a const interface to the object you provide for find, idk.
       ask Stoustrup. leave a flaming bag of poop on his doorstep. */
-   return *this->associations.find(const_cast<Address *>(address))->second;
+   return *this->associations.find(const_cast<Address *>(&address))->second;
 }
 
 void
 AddressPool::move
-(const Address *address, const LPVOID pointer)
+(const Address &address, const LPVOID pointer)
 {
    return this->move(address, reinterpret_cast<Label>(pointer));
 }
    
 void
 AddressPool::move
-(const Address *address, Label newLabel)
+(const Address &address, Label newLabel)
 {
    this->throwIfNotBound(address);
 
    if (this->hasLabel(newLabel))
-      this->rebind(address, this->getIdentifier(newLabel));
+      this->rebind(&address, this->getIdentifier(newLabel));
    else
-      this->rebind(address, this->newIdentifier(newLabel));
+      this->rebind(&address, this->newIdentifier(newLabel));
 }
 
 void
@@ -524,20 +542,11 @@ AddressPool::releaseIdentifier
    if (!this->hasIdentifier(identifier))
       return;
 
-   /* unlabel this identifier if it's in there. it may not be-- unbinding/unlabeling it may have removed it
-      from the identifier map as well as the label map, but did not destroy the identifier. */
    labelIter = this->labels.find(*identifier);
 
    if (labelIter != this->labels.end())
       this->unidentify(identifier);
 
-   /* did the unlabelling kill us? we're done. */
-   if (!this->hasIdentifier(identifier))
-      return;
-   
-   /* identifier is still alive. destroy it. */
-   this->identities.erase(identifier);
-   *identifier = 0;
    delete identifier;
 }
 
@@ -556,7 +565,7 @@ Identifier
 AddressPool::getAssociation
 (const Address *address) const
 {
-   this->throwIfNotAssociated(address);
+   this->throwIfNotAssociated(*address);
 
    /* I don't have anything witty to say here. I'm sure you can find my stupid childish commentary
       on this earlier in the file. <3 */
@@ -592,7 +601,7 @@ AddressPool::rebind
    BindingMap::iterator bindingIter;
    Address *deconst = const_cast<Address *>(address);
 
-   this->throwIfNotAssociated(address);
+   this->throwIfNotAssociated(*address);
    this->throwIfNoIdentifier(identifier);
 
    assoc = this->associations[deconst];
@@ -624,8 +633,8 @@ AddressPool::unbind
    std::set<Address *>::iterator addrIter;
    Address *deconst = const_cast<Address *>(address);
 
-   this->throwIfNotAssociated(address);
-   this->throwIfNotBound(address);
+   this->throwIfNotAssociated(*address);
+   this->throwIfNotBound(*address);
 
    assoc = this->associations[deconst];
    this->associations.erase(deconst);
@@ -763,10 +772,8 @@ AddressPool::unidentify
    if (this->labels[*identifier].size() == 0)
       this->labels.erase(*identifier);
 
-   /* when you unlabel a identifier, you're also destroying it. release the identifier if it's
-      one of ours. although I don't know why it wouldn't... but just in case. */
-   if (this->identities.find(identifier) != this->identities.end())
-      this->releaseIdentifier(identifier);
+   this->identities.erase(identifier);
+   *identifier = 0;
 }
 
 Address::Exception::Exception
@@ -861,7 +868,7 @@ Address::Address
 Address::~Address
 (void)
 {
-   if (this->hasPool() && this->pool->isBound(this))
+   if (this->hasPool() && this->pool->isBound(*this))
       this->pool->unbind(this);
 }
 
@@ -874,16 +881,16 @@ Address::operator=
       if (!this->hasPool())
          return;
 
-      if (this->pool->isBound(this))
+      if (this->pool->isBound(*this))
          this->pool->unbind(this);
 
       this->pool = NULL;
       return;
    }
    
-   address.pool->throwIfNotAssociated(&address);
+   address.pool->throwIfNotAssociated(address);
 
-   if (this->hasPool() && this->pool->isBound(this))
+   if (this->hasPool() && this->pool->isBound(*this))
       this->pool->unbind(this);
 
    this->pool = address.pool;
@@ -1106,7 +1113,7 @@ bool
 Address::isNull
 (void) const
 {
-   return !this->hasPool() || !this->pool->isAssociated(this);
+   return !this->hasPool() || !this->pool->isAssociated(*this);
 }
 
 bool
@@ -1121,6 +1128,16 @@ Address::inRange
 (void) const
 {
    return this->hasPool() && !this->isNull() && this->pool->inRange(this->label());
+}
+
+bool
+Address::sharesIdentifier
+(const Address &address) const
+{
+   if (!this->hasPool() || !address.hasPool())
+      return false;
+
+   return this->pool->sharesIdentifier(*this, address);
 }
 
 void
@@ -1159,7 +1176,7 @@ Address::setPool
 {
    Label label;
    
-   if (this->hasPool() && this->pool->isBound(this))
+   if (this->hasPool() && this->pool->isBound(*this))
    {
       label = this->label();
       this->pool->unbind(this);
