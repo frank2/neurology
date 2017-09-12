@@ -82,6 +82,20 @@ Allocator::SplitsExceededException::SplitsExceededException
 {
 }
 
+Allocator::OrphanAllocationException::OrphanAllocationException
+(Allocator &allocator, Allocation &allocation)
+   : Allocator::Exception(allocator, EXCSTR(L"Allocation has no parent."))
+   , allocation(allocation)
+{
+}
+
+Allocator::PoolCollisionException::PoolCollisionException
+(Allocator &allocator, Address &address)
+   : Allocator::Exception(allocator, EXCSTR(L"A memory address was already pooled with the given address."))
+   , address(address)
+{
+}
+
 Allocator::Allocator
 (void)
    : split(true)
@@ -233,14 +247,25 @@ bool
 Allocator::hasParent
 (const Allocation &allocation) const
 {
-   return this->parents.count(&allocation) > 0;
+   return this->parents.count(const_cast<Allocation *>(&allocation)) > 0;
+}
+
+bool
+Allocator::hasChildren
+(const Allocation &allocation) const
+{
+   return this->children.count(const_cast<Allocation *>(&allocation)) > 0;
 }
 
 bool
 Allocator::isChild
 (const Allocation &parent, const Allocation &child) const
 {
-   return this->hasParent(child) && this->children.at(&parent).find(const_cast<Allocation *>(&child)) != this->children.end();
+   if (!this->hasParent(child))
+      return false;
+   
+   const std::set<Allocation *> &familyRef = this->children.at(const_cast<Allocation *>(&parent));
+   return familyRef.find(const_cast<Allocation *>(&child)) != familyRef.end();
 }
 
 void
@@ -281,6 +306,14 @@ Allocator::throwIfNoAllocation
 {
    if (!this->hasAddress(address))
       throw UnallocatedAddressException(const_cast<Allocator &>(*this), const_cast<Address &>(address));
+}
+
+void
+Allocator::throwIfNoParent
+(const Allocation &allocation) const
+{
+   if (!this->hasParent(allocation))
+      throw OrphanAllocationException(const_cast<Allocator &>(*this), const_cast<Allocation &>(allocation));
 }
 
 const Address
@@ -502,7 +535,8 @@ Allocator::allocate
 (SIZE_T size)
 {
    Allocation newAllocation = this->null();
-   return this->allocate(&newAllocation, size);
+   this->allocate(&newAllocation, size);
+   return newAllocation;
 }
 
 void
@@ -510,14 +544,14 @@ Allocator::reallocate
 (const Allocation &allocation, SIZE_T size)
 {
    /* just call the protected reallocation function */
-   this->reallocate(&allocation, size)
+   this->reallocate(const_cast<Allocation *>(&allocation), size);
 }
 
 void
 Allocator::deallocate
 (Allocation &allocation)
 {
-   this->deallocate(&allocation)
+   this->deallocate(&allocation);
 }
 
 Data
@@ -556,7 +590,7 @@ Allocator::parent
 {
    this->throwIfNoParent(allocation);
 
-   return this->parents.at(&allocation);
+   return *this->parents[const_cast<Allocation *>(&allocation)];
 }
 
 const Allocation &
@@ -565,11 +599,11 @@ Allocator::parent
 {
    this->throwIfNoParent(allocation);
 
-   return this->parents.at(&allocation);
+   return *this->parents.at(const_cast<Allocation *>(&allocation));
 }
 
 std::set<const Allocation *>
-Allocator::children
+Allocator::getChildren
 (const Allocation &allocation)
 {
    this->throwIfNoParent(allocation);
@@ -577,8 +611,8 @@ Allocator::children
    if (!this->hasChildren(allocation))
       return std::set<const Allocation *>();
 
-   return std::set<const Allocation *>(this->children.at(&allocation).begin()
-                                       ,this->children.at(&allocation).end());
+   return std::set<const Allocation *>(this->children.at(const_cast<Allocation *>(&allocation)).begin()
+                                       ,this->children.at(const_cast<Allocation *>(&allocation)).end());
 }
 
 Address
@@ -641,7 +675,7 @@ Allocator::reallocate
       * calculate child->end().label() + delta
       * if it's less than child->start(), it has been deleted
       * if it's greater than child->start(), it has been resized */
-   if (this->chidlren.count(allocation) > 0 && paternalEnd < allocation->end())
+   if (this->children.count(allocation) > 0 && allocation->end() >= paternalEnd)
    {
       std::set<Allocation *>::iterator childIter;
       std::vector<Allocation *> deadChildren;
@@ -651,9 +685,9 @@ Allocator::reallocate
            childIter!=this->children.at(allocation).end();
            ++childIter)
       {
-         if (*childIter->begin() >= paternalEnd)
+         if ((*childIter)->start() >= paternalEnd)
             deadChildren.push_back(*childIter);
-         else if (*childIter->end() > paternalEnd)
+         else if ((*childIter)->end() > paternalEnd)
             this->addressPools.at(*childIter)->setMax(paternalEnd);
       }
 
@@ -728,12 +762,12 @@ Allocator::rebind
 
    if (this->hasParent(*allocation))
    {
-      if (address.usesPool(this->addressPools.at(allocation->address())))
+      if (newAddress.usesPool(this->addressPools.at(allocation->address())))
          localNewAddress = newAddress;
       else
          localNewAddress = this->addressPools.at(allocation->address())->address(newAddress.label());
    }
-   else if (address.usesPool(&this->pooledAddresses))
+   else if (newAddress.usesPool(&this->pooledAddresses))
       localNewAddress = newAddress;
    else
       localNewAddress = this->pooledAddresses.address(newAddress.label());
@@ -756,10 +790,10 @@ Allocator::rebind
    
    if (this->hasChildren(*allocation))
    {
-      ChildMap::iterator childIter;
+      std::set<Allocation *>::iterator childIter;
 
-      for (childIter = this->children.at(*allocation).begin();
-           childIter != this->children.at(*allocation).end();
+      for (childIter = this->children.at(const_cast<Allocation *>(allocation)).begin();
+           childIter != this->children.at(const_cast<Allocation *>(allocation)).end();
            ++childIter)
       {
          this->rebind(*childIter
@@ -789,7 +823,7 @@ Allocator::unbind
    if (!this->hasParent(*allocation))
       this->throwIfNotPooled(allocation->baseAddress());
    else
-      this->abandonParent(allocation);
+      this->disownChild(allocation);
    
    if (this->children.count(allocation) > 0)
    {
@@ -1615,5 +1649,5 @@ Allocation::children
 {
    this->throwIfInvalid();
 
-   return this->allocator->children(*this);
+   return this->allocator->getChildren(*this);
 }

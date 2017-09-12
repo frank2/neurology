@@ -3,7 +3,6 @@
 #include <windows.h>
 
 #include <neurology/exception.hpp>
-#include <neurology/object.hpp>
 
 #define NULL_HANDLE (static_cast<HANDLE>(NULL))
 

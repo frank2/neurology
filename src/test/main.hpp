@@ -1,8 +1,6 @@
 #pragma once
 
-#include <iostream>
+#include <map>
 
-#include <assert.h>
-
-#include <neurology.hpp>
-#pragma comment(lib, "neurology")
+#include "test.hpp"
+#include "tests/address.hpp"

@@ -112,6 +112,22 @@ namespace Neurology
          SplitsExceededException(Allocator &allocator, Address &address, SIZE_T size);
       };
 
+      class OrphanAllocationException : public Exception
+      {
+      public:
+         Allocation &allocation;
+         
+         OrphanAllocationException(Allocator &allocator, Allocation &allocation);
+      };
+
+      class PoolCollisionException : public Exception
+      {
+      public:
+         Address &address;
+
+         PoolCollisionException(Allocator &allocator, Address &address);
+      };
+
       typedef std::map<Address, SIZE_T> MemoryPool;
       typedef std::map<Address, AddressPool *> AddressPoolMap;
       typedef std::map<Allocation *, Address> AssociationMap;
@@ -156,6 +172,7 @@ namespace Neurology
       void throwIfBound(const Allocation &allocation) const;
       void throwIfNotBound(const Allocation &allocation) const;
       void throwIfNoAllocation(const Address &address) const;
+      void throwIfNoParent(const Allocation &allocation) const;
 
       const Address addressOf(const Allocation &allocation) const;
       Address address(const Allocation &allocation);
@@ -210,7 +227,7 @@ namespace Neurology
 
       Allocation &parent(const Allocation &allocation);
       const Allocation &parent(const Allocation &allocation) const;
-      std::set<const Allocation *> children(const Allocation &allocation);
+      std::set<const Allocation *> getChildren(const Allocation &allocation);
       
    protected:
       virtual Address poolAddress(SIZE_T size);
@@ -321,7 +338,6 @@ namespace Neurology
       void operator=(const Allocation *allocation);
       Address operator*(void);
       const Address operator*(void) const;
-      Allocation operator[](const Address &start, const Address &end);
 
       bool isNull(void) const;
       bool isBound(void) const;

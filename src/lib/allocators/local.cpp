@@ -39,7 +39,8 @@ LocalAllocator::LocalAllocator
 (void)
    : Allocator()
 {
-   this->split = false;
+   this->split = false; // local allocator doesn't split because it's a heap
+   this->local = true; // it's literally in the name my dude 
 }
 
 Address
@@ -118,7 +119,8 @@ LocalAllocator::writeAddress
 {
    LONG status;
 
-   status = CopyData(destination.pointer(),
+   /* if you come across this code, can you explain to me why reinterpret_cast<const LPVOID> doesn't work here? */
+   status = CopyData(destination.pointer()
                      ,static_cast<LPVOID>(
                         const_cast<LPBYTE>(data.data()))
                      ,data.size());

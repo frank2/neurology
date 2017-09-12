@@ -152,7 +152,6 @@
     <ClInclude Include="..\..\src\include\neurology\allocators\void.hpp" />
     <ClInclude Include="..\..\src\include\neurology\configuration.hpp" />
     <ClInclude Include="..\..\src\include\neurology\exception.hpp" />
-    <ClInclude Include="..\..\src\include\neurology\object.hpp" />
     <ClInclude Include="..\..\src\include\neurology\pe.hpp" />
     <ClInclude Include="..\..\src\include\neurology\pe\dos.hpp" />
     <ClInclude Include="..\..\src\include\neurology\pe\file.hpp" />
@@ -161,7 +160,6 @@
     <ClInclude Include="..\..\src\include\neurology\pe\optional.hpp" />
     <ClInclude Include="..\..\src\include\neurology\pe\section.hpp" />
     <ClInclude Include="..\..\src\include\neurology\win32.hpp" />
-    <ClInclude Include="..\..\src\include\neurology\win32\handle.hpp" />
     <ClInclude Include="..\..\src\include\neurology\win32\process.hpp" />
     <ClInclude Include="..\..\src\include\neurology\win32\security.hpp" />
   </ItemGroup>
@@ -177,7 +175,6 @@
     <ClCompile Include="..\..\src\lib\pe\nt.cpp" />
     <ClCompile Include="..\..\src\lib\pe\optional.cpp" />
     <ClCompile Include="..\..\src\lib\pe\section.cpp" />
-    <ClCompile Include="..\..\src\lib\win32\handle.cpp" />
     <ClCompile Include="..\..\src\lib\win32\process.cpp" />
     <ClCompile Include="..\..\src\lib\win32\security.cpp" />
   </ItemGroup>

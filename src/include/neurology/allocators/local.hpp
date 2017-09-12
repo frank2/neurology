@@ -68,21 +68,4 @@ namespace Neurology
    }
 
    void nrlFree(Allocation &allocation);
-
-   /*
-   template <class Type> Object<Type> nrlObject(void)
-   {
-      return Object<Type>(neuMalloc<Type>());
-   }
-
-   template <class Type> Pointer<Type> nrlPointer(void)
-   {
-      return Pointer<Type>(neuMalloc<Type>());
-   }
-
-   template <class Type> Pointer<Type> nrlPointer(SIZE_T size)
-   {
-      return Pointer<Type>(neuMalloc<Type>(size));
-   }
-   */
 }

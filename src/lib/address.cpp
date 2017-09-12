@@ -838,6 +838,20 @@ Address::Address
 }
 
 Address::Address
+(unsigned int lowLabel)
+   : pool(&AddressPool::Instance)
+{
+   Identifier newIdentifier;
+
+   if (this->pool->hasLabel(lowLabel))
+      newIdentifier = this->pool->getIdentifier(lowLabel);
+   else
+      newIdentifier = this->pool->newIdentifier(lowLabel);
+
+   this->pool->bind(this, newIdentifier);
+}
+
+Address::Address
 (const Address &address)
    : pool(NULL)
 {
@@ -945,6 +959,16 @@ Address::operator+
 }
 
 Address
+Address::operator+
+(int shift) const
+{
+   /* merely here because C++ doesn't know what to do with a basic int... sigh. 
+      you would think it would upcast the int to std::intptr_t and extend the
+      signage, but no, it just gets confused. */
+   return this->operator+(static_cast<std::intptr_t>(shift));
+}
+
+Address
 Address::operator-
 (std::intptr_t shift) const
 {
@@ -968,6 +992,13 @@ Address::operator-
       throw AddressUnderflowException(*const_cast<Address *>(this), shift);
    
    return this->pool->address(this->label() - shift);
+}
+
+Address
+Address::operator-
+(int shift) const
+{
+   return this->operator-(static_cast<std::intptr_t>(shift));
 }
 
 std::intptr_t
@@ -1008,6 +1039,13 @@ Address::operator+=
 }
 
 Address &
+Address::operator+=
+(int shift)
+{
+   return this->operator+=(static_cast<std::intptr_t>(shift));
+}
+
+Address &
 Address::operator-=
 (std::intptr_t shift)
 {
@@ -1033,6 +1071,13 @@ Address::operator-=
 
    this->move(newValue);
    return *this;
+}
+
+Address &
+Address::operator-=
+(int shift)
+{
+   return this->operator-=(static_cast<std::intptr_t>(shift));
 }
 
 LPVOID
@@ -1075,7 +1120,7 @@ bool
 Address::inRange
 (void) const
 {
-   return this->hasPool() && this->pool->inRange(this->label());
+   return this->hasPool() && !this->isNull() && this->pool->inRange(this->label());
 }
 
 void
@@ -1441,18 +1486,18 @@ Address
 Offset::operator*
 (void)
 {
-   return this->getAddress();
+   return this->address();
 }
 
 const Address
 Offset::operator*
 (void) const
 {
-   return this->getAddress();
+   return this->address();
 }
 
 Address
-Offset::getAddress
+Offset::address
 (void)
 {
    this->throwIfNoPool();
@@ -1461,7 +1506,7 @@ Offset::getAddress
 }
 
 const Address
-Offset::getAddress
+Offset::address
 (void) const
 {
    this->throwIfNoPool();
@@ -1491,15 +1536,25 @@ Offset::setAddress
 }
 
 std::uintptr_t
-Offset::getOffset(void) const
+Offset::getOffset
+(void) const
 {
    return this->offset;
 }
 
 void
-Offset::setOffset(std::uintptr_t offset)
+Offset::setOffset
+(std::uintptr_t offset)
 {
    this->offset = offset;
+}
+
+void
+Offset::setOffset
+(Address &address, std::uintptr_t offset)
+{
+   this->setAddress(address);
+   this->setOffset(offset);
 }
 
 Label

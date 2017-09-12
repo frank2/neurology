@@ -13,15 +13,33 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Header Files\tests">
+      <UniqueIdentifier>{e9e309e6-2781-4b65-965e-34eada641010}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\tests">
+      <UniqueIdentifier>{a895154d-4ae1-4a7d-a523-a8f1802f73ba}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\src\test\main.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\src\test\test.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\test\tests\address.hpp">
+      <Filter>Header Files\tests</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\test\main.cpp">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\test\test.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\test\tests\address.cpp">
+      <Filter>Source Files\tests</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>
