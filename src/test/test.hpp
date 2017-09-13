@@ -16,14 +16,16 @@ namespace NeurologyTest
 {
    class TestFailure;
    
+   typedef std::vector<TestFailure> FailVector;
+   
    class Test
    {
    public:
       Test(void);
 
-      virtual void run(std::vector<TestFailure> *failures);
+      virtual void run(FailVector *failures);
 
-      void launch(std::vector<TestFailure> *failures);
+      void launch(FailVector *failures);
       
       template <class ... Args> void assertMessage(LPWSTR format, Args ... args)
       {
@@ -31,7 +33,7 @@ namespace NeurologyTest
          wprintf(L"\r\n");
       }
 
-      void assertMacro(std::vector<TestFailure> *failures, const char *test, const char *expression
+      void assertMacro(FailVector *failures, const char *test, const char *expression
                        ,bool result, std::uintptr_t line, const char *fileName);
    };
 
@@ -46,6 +48,22 @@ namespace NeurologyTest
       TestFailure(void);
       TestFailure(const char *test, const char *expression, std::uintptr_t line, const char *fileName);
       TestFailure(const TestFailure &failure);
+   };
+
+   class TestRunner
+   {
+   public:
+      static TestRunner Instance;
+      
+   protected:
+      std::vector<Test *> tests;
+      FailVector failures;
+      
+      TestRunner(void);
+
+   public:
+      int run(void);
+      void pushTest(Test *test);
    };
 }
    

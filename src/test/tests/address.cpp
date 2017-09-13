@@ -3,6 +3,8 @@
 using namespace Neurology;
 using namespace NeurologyTest;
 
+AddressTest AddressTest::Instance;
+
 AddressTest::AddressTest
 (void)
    : Test()
@@ -11,7 +13,7 @@ AddressTest::AddressTest
 
 void
 AddressTest::run
-(std::vector<TestFailure> *failures)
+(FailVector *failures)
 {
    this->testAddressPool(failures);
    this->testAddress(failures);
@@ -19,7 +21,7 @@ AddressTest::run
 
 void
 AddressTest::testAddressPool
-(std::vector<TestFailure> *failures)
+(FailVector *failures)
 {
    AddressPool basicPool, drainagePool;
    AddressPool x86Pool(0, 0xFFFFFFFF);
@@ -61,7 +63,7 @@ AddressTest::testAddressPool
    NASSERT(!x86Pool.isAssociated(addressObj)); // setRange should have nuked it
    NASSERT(x86Pool.size() == 0x1000);
 
-   x86Pool.rebase(0x690000);
+   x86Pool.rebase(0x690000); // nice
 
    NASSERT(x86Pool.maximum() == 0x691000);
    NASSERT(x86Pool.size() == 0x1000);
@@ -71,7 +73,7 @@ AddressTest::testAddressPool
 
 void
 AddressTest::testAddress
-(std::vector<TestFailure> *failures)
+(FailVector *failures)
 {
    Address address;
    Address addressOfAddress;
@@ -99,7 +101,7 @@ AddressTest::testAddress
 
    basicAddress += 1;
 
-   NASSERT(basicAddress == 0xDEADBEEFDEFACED1 + 1);
+   NASSERT(basicAddress == 0xDEADBEEFDEFACED1+1);
 
    basicAddress -= 1;
 
@@ -107,7 +109,7 @@ AddressTest::testAddress
 
    basicAddress += -1;
 
-   NASSERT(basicAddress == 0xDEADBEEFDEFACED1 - 1);
+   NASSERT(basicAddress == 0xDEADBEEFDEFACED1-1);
 
    basicAddress -= -1;
 
@@ -121,7 +123,7 @@ AddressTest::testAddress
    NASSERT(basicAddress.label() == 0xDEADBEEFDEFACED1);
 
    targetAddress = Address(basicAddress.label());
-   pivotAddress = targetAddress;
+   pivotAddress = Address(targetAddress.label());
 
    NASSERT(targetAddress.sharesIdentifier(pivotAddress));
    

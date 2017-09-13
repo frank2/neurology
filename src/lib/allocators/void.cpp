@@ -1180,6 +1180,8 @@ Allocation::operator=
 
    if (allocation.isValid())
       this->copy(allocation);
+   else if (!this->isValid() && allocation.allocator != NULL)
+      this->allocator = allocation.allocator;
    else
       this->throwIfInvalid();
 }

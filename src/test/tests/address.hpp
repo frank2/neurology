@@ -12,12 +12,14 @@ namespace NeurologyTest
    class AddressTest : public Test
    {
    public:
-      AddressTest();
-
-      virtual void run(std::vector<TestFailure> *failures);
+      static AddressTest Instance;
 
    protected:
-      void testAddress(std::vector<TestFailure> *failures);
-      void testAddressPool(std::vector<TestFailure> *failures);
+      AddressTest(void);
+
+   public:
+      virtual void run(FailVector *failures);
+      void testAddressPool(FailVector *failures);
+      void testAddress(FailVector *failures);
    };
 }

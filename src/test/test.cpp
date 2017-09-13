@@ -2,14 +2,17 @@
 
 using namespace NeurologyTest;
 
+TestRunner TestRunner::Instance;
+
 Test::Test
 (void)
 {
+   TestRunner::Instance.pushTest(this);
 }
 
 void
 Test::run
-(std::vector<TestFailure> *failures)
+(FailVector *failures)
 {
    /* null test, return no failures. */
    return;
@@ -17,7 +20,7 @@ Test::run
 
 void
 Test::launch
-(std::vector<TestFailure> *failures)
+(FailVector *failures)
 {
    std::uintptr_t failureCount = failures->size();
    
@@ -30,7 +33,7 @@ Test::launch
 
 void
 Test::assertMacro
-(std::vector<TestFailure> *failures, const char *test, const char *expression, bool result, std::uintptr_t line, const char *fileName)
+(FailVector *failures, const char *test, const char *expression, bool result, std::uintptr_t line, const char *fileName)
 
 {
    this->assertMessage(L"[%s] [%S] assertion: %S... %s"
@@ -68,4 +71,71 @@ TestFailure::TestFailure
    , line(failure.line)
    , fileName(failure.fileName)
 {
+}
+
+TestRunner::TestRunner
+(void)
+{
+}
+
+int
+TestRunner::run
+(void)
+{
+   int result;
+
+   for (std::vector<Test *>::iterator iter=this->tests.begin();
+        iter!=this->tests.end();
+        ++iter)
+      (*iter)->launch(&this->failures);
+
+   if (this->failures.size() == 0)
+   {
+      wprintf(L"\r\n[$] All tests passed!\r\n\r\n");
+      result = 0;
+   }
+   else
+   {
+      std::map<const char *, FailVector > organizedFails;
+      wprintf(L"[#] Errors occurred.\r\n");
+      wprintf(L"[*] Organizing failures...");
+
+      for (FailVector::iterator iter=this->failures.begin();
+           iter!=this->failures.end();
+           ++iter)
+      {
+         organizedFails[iter->test].push_back(*iter);
+      }
+
+      wprintf(L"done.\r\n\r\n==========\r\n\r\n");
+      wprintf(L"[!] %I64d total failures.\r\n\r\n", failures.size());
+
+      for (std::map<const char *, FailVector>::iterator iter=organizedFails.begin();
+           iter!=organizedFails.end();
+           ++iter)
+      {
+         wprintf(L"[!] %I64d failures in %S...\r\n", iter->second.size(), iter->first);
+
+         for (FailVector::iterator failIter=iter->second.begin();
+              failIter!=iter->second.end();
+              ++failIter)
+         {
+            wprintf(L"... %S (line %I64d, file %S)\r\n", failIter->expression, failIter->line, failIter->fileName);
+         }
+
+         wprintf(L"\r\n");
+      }
+      
+      result = 1;
+   }
+
+   system("pause");
+   return result;
+}
+
+void
+TestRunner::pushTest
+(Test *test)
+{
+   this->tests.push_back(test);
 }

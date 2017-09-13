@@ -157,6 +157,13 @@ AddressPool::drain
       /* do this in lieu of setPool to avoid rebinding */
       iter->first->pool = &targetPool;
    }
+
+   /* the copy constructors literally copy, and that's not what we want to do.
+      so clear the pool we drained. */
+   this->identities.clear();
+   this->labels.clear();
+   this->bindings.clear();
+   this->associations.clear();
 }
 
 std::set<Address>
@@ -183,7 +190,7 @@ bool
 AddressPool::hasLabel
 (Label label) const
 {
-   return this->labels.find(label) != this->labels.end();
+   return this->labels.count(label) > 0;
 }
 
 bool
@@ -414,7 +421,7 @@ AddressPool::move
    {
       this->reidentify(*identIter, newLabel);
       
-      if (this->labels.find(priorLabel) == this->labels.end())
+      if (this->labels.count(priorLabel) == 0)
          break;
    }
 }
@@ -433,7 +440,7 @@ AddressPool::shift
       std::set<Identifier>::iterator identIter;
       Label label = snapIter->label();
 
-      while ((identIter = this->labels[label].begin()) != this->labels[label].end())
+      while (this->labels.count(label) > 0 && (identIter = this->labels[label].begin()) != this->labels[label].end())
          this->reidentify(*identIter, label+shift);
    }
 }
@@ -495,7 +502,7 @@ AddressPool::getIdentifier
 
       buddy why can't you just return a const reference for std::map::operator[]() const
     */
-   return *this->labels.find(label)->second.begin();
+   return *this->labels.at(label).begin();
 }
 
 Identifier
@@ -512,9 +519,6 @@ AddressPool::newIdentifier
    Identifier newIdentifier;
 
    this->throwIfNotInRange(label);
-   
-   if (this->labels.find(label) == this->labels.end())
-      this->labels[label] = std::set<Identifier>();
 
    newIdentifier = new Label(0);
    this->identities.insert(newIdentifier);
@@ -542,9 +546,7 @@ AddressPool::releaseIdentifier
    if (!this->hasIdentifier(identifier))
       return;
 
-   labelIter = this->labels.find(*identifier);
-
-   if (labelIter != this->labels.end())
+   if (this->labels.count(*identifier) > 0)
       this->unidentify(identifier);
 
    delete identifier;
@@ -605,13 +607,12 @@ AddressPool::rebind
    this->throwIfNoIdentifier(identifier);
 
    assoc = this->associations[deconst];
-   bindingIter = this->bindings.find(assoc);
 
-   if (bindingIter != this->bindings.end() && bindingIter->second.find(deconst) != bindingIter->second.end())
+   if (this->bindings.count(assoc) > 0 && this->bindings[assoc].find(deconst) != this->bindings[assoc].end())
    {
-      bindingIter->second.erase(deconst);
+      this->bindings[assoc].erase(deconst);
 
-      if (bindingIter->second.size() == 0)
+      if (this->bindings[assoc].size() == 0)
          this->bindings.erase(assoc);
    }
 
@@ -691,12 +692,12 @@ AddressPool::identify
    this->throwIfNoIdentifier(identifier);
    this->throwIfNotInRange(label);
    
-   if (this->labels.find(label) == this->labels.end())
+   if (this->labels.count(label) == 0)
       this->labels[label] = std::set<Identifier>();
 
-   if (identifier != 0)
+   if (*identifier != 0)
    {
-      if (this->labels.find(*identifier) != this->labels.end() && this->labels[*identifier].find(identifier) != this->labels[*identifier].end())
+      if (this->labels.count(*identifier) > 0 && this->labels[*identifier].find(identifier) != this->labels[*identifier].end())
          throw IdentifierAlreadyLabeledException(*this, identifier);
 
       if (this->labels[label].find(identifier) != this->labels[label].end())
@@ -725,23 +726,21 @@ AddressPool::reidentify
 
    /* find the identifier set associated with this identifier's label. if it's found,
       find if the identifier is in the identifier set. if it is, erase it. */
-   labelIter = this->labels.find(*identifier);
-
-   if (labelIter != this->labels.end())
+   if (this->labels.count(*identifier) > 0)
    {
       std::set<Identifier>::iterator identifierIter;
-      identifierIter = labelIter->second.find(identifier);
+      identifierIter = this->labels[*identifier].find(identifier);
       
-      if (identifierIter != labelIter->second.end())
+      if (identifierIter != this->labels[*identifier].end())
       {
-         labelIter->second.erase(identifier);
+         this->labels[*identifier].erase(identifier);
 
-         if (labelIter->second.size() == 0)
+         if (this->labels[*identifier].size() == 0)
             this->labels.erase(*identifier);
       }
    }
 
-   if (this->labels.find(newLabel) == this->labels.end())
+   if (this->labels.count(newLabel) == 0)
       this->labels[newLabel] = std::set<Identifier>();
 
    this->labels[newLabel].insert(identifier);
@@ -1218,7 +1217,7 @@ Address::move
 {
    this->throwIfNoPool();
    
-   this->pool->move(this, newLabel);
+   this->pool->move(*this, newLabel);
 }
 
 void
