@@ -26,6 +26,12 @@ LocalAllocatorTest::testAllocator
    LocalAllocator allocator;
    Allocation allocation, otherAlloc;
    Address allocAddress, cmpAddress;
+   std::uintptr_t uintptr = 0xDEADBEEFDEFACED1;
+   Data writeData, recvData;
+
+   this->assertMessage(L"[*] Running Allocator tests.");
+
+   writeData = VarData(uintptr);
 
    /* local allocator shouldn't split-- it's simply a shell for the C++ heap
       operators */
@@ -45,13 +51,13 @@ LocalAllocatorTest::testAllocator
    allocation = allocator.allocate<std::uintptr_t>();
    allocAddress = Address(allocator.address(allocation));
 
-   NASSERT(allocAddress == allocation.address())
+   NASSERT(allocAddress == allocation.address());
 
    NASSERT(allocator.isPooled(allocAddress));
    NASSERT(allocator.isAssociated(allocation));
    NASSERT(allocator.isBound(allocation));
    NASSERT(allocator.hasAddress(allocAddress));
-   NASSERT(allocator.hasAddress(allocAddress.+4));
+   NASSERT(allocator.hasAddress(allocAddress+4));
    NASSERT(!allocator.hasParent(allocation));
    NASSERT(!allocator.hasChildren(allocation));
 
@@ -69,6 +75,41 @@ LocalAllocatorTest::testAllocator
 
    NASSERT(allocator.bindCount(allocAddress) == 2);
    NASSERT(allocator.querySize(allocation) == sizeof(std::uintptr_t));
+
+   allocator.reallocate(allocation, sizeof(std::uintptr_t)*4);
+
+   NASSERT(allocator.querySize(allocation) == sizeof(std::uintptr_t)*4);
+   NASSERT(allocator.querySize(otherAlloc) == sizeof(std::uintptr_t)*4);
+
+   allocator.write(allocAddress, writeData);
+   recvData = allocator.read(allocAddress, sizeof(std::uintptr_t));
+   
+   NASSERT(writeData == recvData);
+
+   /* should still technically be around in some ephemeral way because we have
+      otherAlloc pointing to the underlying allocation */
+   allocator.deallocate(allocation);
+
+   NASSERT(allocator.isPooled(allocAddress));
+   NASSERT(!allocator.isAssociated(allocation));
+   NASSERT(!allocator.isBound(allocation));
+   NASSERT(allocator.hasAddress(allocAddress));
+   NASSERT(allocator.hasAddress(allocAddress+4));
+   NASSERT(!allocator.hasParent(allocation));
+   NASSERT(!allocator.hasChildren(allocation));
+
+   /* now the underlying pool should be gone */
+   allocator.deallocate(otherAlloc);
+
+   NASSERT(!allocator.isPooled(allocAddress));
+   NASSERT(!allocator.isAssociated(allocation));
+   NASSERT(!allocator.isBound(allocation));
+   NASSERT(!allocator.hasAddress(allocAddress));
+   NASSERT(!allocator.hasAddress(allocAddress+4));
+   NASSERT(!allocator.hasParent(allocation));
+   NASSERT(!allocator.hasChildren(allocation));
+   
+   this->assertMessage(L"[*] Finished Allocator tests.");
 }
 
 void

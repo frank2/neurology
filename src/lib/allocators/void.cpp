@@ -492,7 +492,7 @@ Allocator::unpool
    }
 }
 
-Allocation
+Allocation &
 Allocator::find
 (const Address &address) const
 {
@@ -510,7 +510,7 @@ Allocator::find
    --bindIter;
 
    if ((*bindIter->second.begin())->inRange(address))
-      return *bindIter->second.begin();
+      return **bindIter->second.begin();
 
    /* couldn't find it in our allocations, return a null allocation. */
    return this->null();

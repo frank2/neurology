@@ -9,7 +9,7 @@
 #include <neurology/address.hpp>
 #include <neurology/exception.hpp>
 
-#define BlockData(ptr, size) Neurology::Data(static_cast<LPBYTE>(ptr), static_cast<LPBYTE>(ptr)+(size))
+#define BlockData(ptr, size) Neurology::Data((LPBYTE)(ptr),((LPBYTE)(ptr))+(size))
 #define PointerData(ptr) BlockData(ptr, sizeof(*ptr))
 #define VarData(var) PointerData(&var)
 
@@ -186,7 +186,7 @@ namespace Neurology
       Address repool(Address &address, SIZE_T newSize);
       void unpool(Address &address);
       
-      virtual Allocation find(const Address &address) const;
+      virtual Allocation &find(const Address &address) const;
       virtual Allocation null(void);
       virtual Allocation null(void) const;
       
