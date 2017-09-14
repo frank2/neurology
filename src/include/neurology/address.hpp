@@ -305,7 +305,7 @@ namespace Neurology
 
       void bind(const Address *address, const Identifier pointer);
       void rebind(const Address *address, const Identifier newIdentifier);
-      void unbind(const Address *address);
+      void unbind(Address *address);
       void unbindOutOfBounds(void);
       
       void identify(Identifier identity, Label label);

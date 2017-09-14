@@ -96,6 +96,13 @@ Allocator::PoolCollisionException::PoolCollisionException
 {
 }
 
+Allocator::AddressNotFoundException::AddressNotFoundException
+(Allocator &allocator, Address &address)
+   : Allocator::Exception(allocator, EXCSTR(L"The allocator has not allocated any such address."))
+   , address(address)
+{
+}
+
 Allocator::Allocator
 (void)
    : split(true)
@@ -214,7 +221,22 @@ bool
 Allocator::hasAddress
 (const Address &address) const
 {
-   return !this->find(address).isNull();
+   if (this->pooledAddresses.hasLabel(address.label()))
+      return true;
+
+   if (this->addressPools.count(address) > 0)
+      return true;
+
+   /* check all the address pools instead */
+   for (AddressPoolMap::const_iterator iter=this->addressPools.begin();
+        iter!=this->addressPools.end();
+        ++iter)
+   {
+      if (iter->second->inRange(address.label()))
+         return true;
+   }
+
+   return false;
 }
 
 bool
@@ -241,6 +263,22 @@ Allocator::willSplit
 
    /* return the determination of whether or not this has one or more splits */
    return poolIter != this->pooledMemory.end() && endAddr == poolIter->first;
+}
+
+bool
+Allocator::sharesPool
+(const Allocation &left, const Allocation &right) const
+{
+   if (!this->isBound(left) || !this->isBound(right))
+      return false;
+
+   Allocation &leftRoot = this->root(left);
+   Allocation &rightRoot = this->root(right);
+   
+   if (this->associations.count(&leftRoot) == 0 || this->associations.count(&rightRoot) == 0)
+      return false;
+
+   return this->associations.at(&leftRoot) == this->associations.at(&rightRoot);
 }
 
 bool
@@ -290,6 +328,14 @@ Allocator::throwIfBound
 {
    if (this->isBound(allocation))
       throw BoundAllocationException(const_cast<Allocator &>(*this), const_cast<Allocation &>(allocation));
+}
+
+void
+Allocator::throwIfNoAddress
+(const Address &address) const
+{
+   if (!this->hasAddress(address))
+      throw AddressNotFoundException(const_cast<Allocator &>(*this), const_cast<Address &>(address));
 }
 
 void
@@ -383,8 +429,11 @@ Allocator::querySize
 (const Allocation &allocation) const
 {
    Address baseAddress;
+
+   /* if we're not even bound, you know for a fact that's a 0 */
+   if (!this->isBound(allocation))
+      return 0;
    
-   this->throwIfNotBound(allocation);
    baseAddress = this->associations.at(const_cast<Allocation *>(&allocation));
 
    /* if there's no address pool... welp, that's a 0 */
@@ -498,23 +547,43 @@ Allocator::find
 (const Address &address) const
 {
    BindingMap::const_iterator bindIter;
+   std::set<Allocation *>::iterator allocIter, seekIter;
    
    if (this->bindings.count(address) > 0)
-      return **this->bindings.find(address)->second.begin();
-
+      bindIter = this->bindings.find(address);
+   
    /* we didn't find a binding bound to that specific address. try another method. */
-   bindIter = this->bindings.upper_bound(address);
+   else
+   {
+      bindIter = this->bindings.upper_bound(address);
 
-   if (bindIter == this->bindings.begin())
-      return this->null();
+      if (bindIter == this->bindings.begin())
+         throw AddressNotFoundException(const_cast<Allocator &>(*this), const_cast<Address &>(address));
 
-   --bindIter;
+      --bindIter;
+   }
+   
+   allocIter = bindIter->second.begin();
 
-   if ((*bindIter->second.begin())->inRange(address))
-      return **bindIter->second.begin();
+   /* there's only one allocation here-- return it. */
+   if (bindIter->second.size() == 1)
+      return **allocIter;
 
-   /* couldn't find it in our allocations, return a null allocation. */
-   return this->null();
+   seekIter = bindIter->second.end();
+      
+   /* there's multiple allocations found at a binding root, find the largest
+      and return it */
+   for (allocIter;
+        allocIter!=bindIter->second.end();
+        ++allocIter)
+   {
+      if (seekIter == bindIter->second.end())
+         seekIter = iter;
+      else if ((*allocIter)->size() > (*seekIter)->size())
+         seekIter = iter;
+   }
+
+   return **seekIter;
 }
 
 Allocation
@@ -559,13 +628,13 @@ Data
 Allocator::read
 (const Address &address, SIZE_T size) const
 {
-   this->throwIfNoAllocation(address);
+   this->throwIfNoAddress(address);
 
    if (this->willSplit(address, size))
       return this->splitRead(address, size);
    else
    {
-      Allocation allocation = this->find(address);
+      Allocation &allocation = this->find(address);
 
       allocation.throwIfInvalid();
       
@@ -577,12 +646,24 @@ void
 Allocator::write
 (const Address &address, const Data data)
 {
-   this->throwIfNoAllocation(address);
+   this->throwIfNoAddress(address);
 
    if (this->willSplit(address, data.size()))
       return this->splitWrite(address, data);
    else
       return this->write(&this->find(address), address, data);
+}
+
+Allocation &
+Allocator::root
+(const Allocation &allocation) const
+{
+   this->throwIfNotBound(allocation);
+   
+   if (!this->hasParent(allocation))
+      return const_cast<Allocation &>(allocation);
+
+   return this->root(this->parent(allocation));
 }
 
 Allocation &
@@ -1292,6 +1373,41 @@ Allocation::inRange
    return size != 0 && this->inRange(address) && this->inRange(address + static_cast<std::intptr_t>(size - 1));
 }
 
+bool
+Allocation::sharesPool
+(const Allocation &allocation) const
+{
+   return this->isValid() && this->allocator->sharesPool(*this, allocation);
+}
+
+bool
+Allocation::hasParent
+(void) const
+{
+   return this->isValid() && this->allocator->hasParent(*this);
+}
+
+bool
+Allocation::hasChildren
+(void) const
+{
+   return this->isValid() && this->allocator->hasChildren(*this);
+}
+
+bool
+Allocation::isChild
+(const Allocation &parent) const
+{
+   return this->isValid() && this->allocator->isChild(parent, *this);
+}
+
+bool
+Allocation::isParent
+(const Allocation &child) const
+{
+   return this->isValid() && this->allocator->isChild(*this, child);
+}
+
 void
 Allocation::throwIfNoAllocator
 (void) const
@@ -1631,6 +1747,15 @@ Allocation::slice
    this->throwIfInvalid();
 
    return this->allocator->spawn(this, address, size);
+}
+
+Allocation &
+Allocation::root
+(void) const
+{
+   this->throwIfInvalid();
+
+   return this->allocator->root(*this);
 }
 
 Allocation &

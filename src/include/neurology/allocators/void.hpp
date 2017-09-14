@@ -128,6 +128,14 @@ namespace Neurology
          PoolCollisionException(Allocator &allocator, Address &address);
       };
 
+      class AddressNotFoundException : public Exception
+      {
+      public:
+         Address &address;
+
+         AddressNotFoundException(Allocator &allocator, Address &address);
+      };
+
       typedef std::map<Address, SIZE_T> MemoryPool;
       typedef std::map<Address, AddressPool *> AddressPoolMap;
       typedef std::map<Allocation *, Address> AssociationMap;
@@ -157,12 +165,12 @@ namespace Neurology
       bool splits(void) const;
 
       bool isLocal(void) const;
-
       bool isPooled(const Address &address) const;
       bool isAssociated(const Allocation &allocation) const;
       bool isBound(const Allocation &allocation) const;
       bool hasAddress(const Address &address) const;
       bool willSplit(const Address &address, SIZE_T size) const;
+      bool sharesPool(const Allocation &left, const Allocation &right) const;
       bool hasParent(const Allocation &allocation) const;
       bool hasChildren(const Allocation &allocation) const;
       bool isChild(const Allocation &parent, const Allocation &child) const;
@@ -170,6 +178,7 @@ namespace Neurology
       void throwIfNotPooled(const Address &address) const;
       void throwIfNotAssociated(const Allocation &allocation) const;
       void throwIfBound(const Allocation &allocation) const;
+      void throwIfNoAddress(const Address &address) const;
       void throwIfNotBound(const Allocation &allocation) const;
       void throwIfNoAllocation(const Address &address) const;
       void throwIfNoParent(const Allocation &allocation) const;
@@ -187,6 +196,7 @@ namespace Neurology
       void unpool(Address &address);
       
       virtual Allocation &find(const Address &address) const;
+
       virtual Allocation null(void);
       virtual Allocation null(void) const;
       
@@ -225,6 +235,7 @@ namespace Neurology
       Data read(const Address &address, SIZE_T size) const;
       void write(const Address &address, const Data data);
 
+      Allocation &root(const Allocation &allocation) const;
       Allocation &parent(const Allocation &allocation);
       const Allocation &parent(const Allocation &allocation) const;
       std::set<const Allocation *> getChildren(const Allocation &allocation);
@@ -348,6 +359,11 @@ namespace Neurology
       bool inRange(SIZE_T offset, SIZE_T size) const;
       bool inRange(const Address &address) const;
       bool inRange(const Address &address, SIZE_T size) const;
+      bool sharesPool(const Allocation &allocation) const;
+      bool hasParent(void) const;
+      bool hasChildren(void) const;
+      bool isChild(const Allocation &parent) const;
+      bool isParent(const Allocation &child) const;
 
       void throwIfNoAllocator(void) const;
       void throwIfInvalid(void) const;
@@ -390,6 +406,7 @@ namespace Neurology
 
       Allocation slice(const Address &address, SIZE_T size);
 
+      Allocation &root(void) const;
       Allocation &parent(void);
       const Allocation &parent(void) const;
       std::set<const Allocation *> children(void) const;

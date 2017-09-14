@@ -627,25 +627,26 @@ AddressPool::rebind
 
 void
 AddressPool::unbind
-(const Address *address)
+(Address *address)
 {
    Identifier assoc;
    BindingMap::iterator bindIter;
    std::set<Address *>::iterator addrIter;
-   Address *deconst = const_cast<Address *>(address);
 
    this->throwIfNotAssociated(*address);
    this->throwIfNotBound(*address);
 
-   assoc = this->associations[deconst];
-   this->associations.erase(deconst);
-   this->bindings[assoc].erase(deconst);
+   assoc = this->associations[address];
+   this->associations.erase(address);
+   this->bindings[assoc].erase(address);
 
    if (this->bindings[assoc].size() == 0)
    {
       this->bindings.erase(assoc);
       this->releaseIdentifier(assoc);
    }
+
+   address->pool = NULL;
 }
 
 void

@@ -81,6 +81,7 @@ LocalAllocatorTest::testAllocator
    NASSERT(allocator.querySize(allocation) == sizeof(std::uintptr_t)*4);
    NASSERT(allocator.querySize(otherAlloc) == sizeof(std::uintptr_t)*4);
 
+   allocAddress = Address(allocation.address().label());
    allocator.write(allocAddress, writeData);
    recvData = allocator.read(allocAddress, sizeof(std::uintptr_t));
    
@@ -98,7 +99,8 @@ LocalAllocatorTest::testAllocator
    NASSERT(!allocator.hasParent(allocation));
    NASSERT(!allocator.hasChildren(allocation));
 
-   /* now the underlying pool should be gone */
+   /* now the underlying pool should go away, leaving the
+      allocation copy null */
    allocator.deallocate(otherAlloc);
 
    NASSERT(!allocator.isPooled(allocAddress));
@@ -116,21 +118,136 @@ void
 LocalAllocatorTest::testAllocation
 (FailVector *failures)
 {
-   Allocation testAllocation;
+   Allocation testAllocation, clonedAllocation, slicedAllocation, superSliced;
+   Allocator *allocator = &LocalAllocator::Instance;
+   std::uintptr_t uintptr = 0xDEADBEEFDEFACED1;
+   std::uint32_t uint32 = 0xDEADBEEF;
+   std::uint16_t uint16;
+   Data sendData, recvData;
 
    this->assertMessage(L"[*] Running Allocation tests.");
    
    NASSERT(testAllocation.isNull());
    NASSERT(!testAllocation.isBound());
    NASSERT(!testAllocation.isValid());
+   NASSERT(!testAllocation.isLocal()); // not bound to anything, can't be local
+   // never allocated from anything, frankly
+   NASSERT(!testAllocation.allocatedFrom(allocator));
+   // can't be in range of nothing.
+   NASSERT(!testAllocation.inRange(0));
 
-   /* isLocal should return false because this allocation is not bound to an allocator */
-   NASSERT(!testAllocation.isLocal());
-
-   testAllocation = LocalAllocator::Instance.null();
-
-   NASSERT(testAllocation.allocatedFrom(&LocalAllocator::Instance));
+   testAllocation = allocator->null();
+   
+   NASSERT(testAllocation.isNull());
+   NASSERT(!testAllocation.isBound());
+   NASSERT(!testAllocation.isValid());
    NASSERT(testAllocation.isLocal());
+   NASSERT(testAllocation.allocatedFrom(allocator));
+   NASSERT(!testAllocation.inRange(0));
+
+   NASSERT(testAllocation.size() == 0);
+
+   testAllocation.allocate(sizeof(std::uintptr_t));
+
+   NASSERT(!testAllocation.isNull());
+   NASSERT(testAllocation.isBound());
+   NASSERT(testAllocation.isValid());
+   NASSERT(testAllocation.allocatedFrom(allocator));
+   
+   NASSERT(testAllocation.inRange(0));
+   NASSERT(!testAllocation.inRange(sizeof(std::uintptr_t)));
+   NASSERT(testAllocation.inRange(0, sizeof(std::uintptr_t)));
+   NASSERT(!testAllocation.inRange(1, sizeof(std::uintptr_t)));
+   NASSERT(testAllocation.inRange(testAllocation.address()+(sizeof(std::uintptr_t)/2)));
+   NASSERT(testAllocation.inRange(testAllocation.address(), sizeof(std::uintptr_t)));
+   NASSERT(!testAllocation.inRange(testAllocation.address()+1, sizeof(std::uintptr_t)));
+   NASSERT(!testAllocation.inRange(testAllocation.address()+sizeof(std::uintptr_t), 1));
+   
+   NASSERT(testAllocation.end() == testAllocation.start()+sizeof(std::uintptr_t));
+   NASSERT(testAllocation.offset(testAllocation.baseAddress()) == 0);
+   NASSERT(testAllocation.offset(testAllocation.address()+4) == 4);
+
+   NASSERT(testAllocation.size() == sizeof(std::uintptr_t));
+
+   sendData = VarData(uintptr);
+   testAllocation.write(sendData);
+   recvData = testAllocation.read();
+
+   NASSERT(sendData == recvData);
+
+   sendData = VarData(uint32);
+   
+   NASSERT(sendData != testAllocation.read(4));
+   NASSERT(sendData == testAllocation.read(4,4));
+   NASSERT(sendData != testAllocation.read(testAllocation.address(), 4));
+   NASSERT(sendData == testAllocation.read(testAllocation.address()+4, 4));
+
+   testAllocation.write(sendData);
+   
+   NASSERT(sendData == testAllocation.read(4));
+   NASSERT(sendData == testAllocation.read(4,4));
+   NASSERT(sendData == testAllocation.read(testAllocation.address(), 4));
+   NASSERT(sendData == testAllocation.read(testAllocation.address()+4, 4));
+
+   uint32 = 0xDEFACED1;
+   sendData = VarData(uint32);
+
+   testAllocation.write(4, sendData);
+   
+   NASSERT(sendData != testAllocation.read(4));
+   NASSERT(sendData == testAllocation.read(4,4));
+   NASSERT(sendData != testAllocation.read(testAllocation.address(), 4));
+   NASSERT(sendData == testAllocation.read(testAllocation.address()+4, 4));
+
+   testAllocation.write(testAllocation.address(), sendData);
+
+   NASSERT(sendData == testAllocation.read(4));
+   NASSERT(sendData == testAllocation.read(4,4));
+   NASSERT(sendData == testAllocation.read(testAllocation.address(), 4));
+   NASSERT(sendData == testAllocation.read(testAllocation.address()+4, 4));
+
+   clonedAllocation.clone(testAllocation);
+
+   NASSERT(!allocator->sharesPool(testAllocation, clonedAllocation));
+   NASSERT(!clonedAllocation.isChild(testAllocation));
+   NASSERT(!clonedAllocation.isParent(testAllocation));
+   NASSERT(!testAllocation.isParent(clonedAllocation));
+   NASSERT(!testAllocation.isChild(clonedAllocation));
+   NASSERT(sendData == clonedAllocation.read(4));
+   NASSERT(sendData == clonedAllocation.read(4,4));
+   NASSERT(sendData == clonedAllocation.read(clonedAllocation.address(), 4));
+   NASSERT(sendData == clonedAllocation.read(clonedAllocation.address()+4, 4));
+
+   slicedAllocation = testAllocation.slice(testAllocation.address()+2, sizeof(uint32_t));
+   uint32 = 0xCED1DEFA; // 0xDEFA CED1DEFA CED1
+   sendData = VarData(uint32);
+
+   NASSERT(allocator->sharesPool(testAllocation, slicedAllocation));
+   NASSERT(slicedAllocation.isChild(testAllocation));
+   NASSERT(!slicedAllocation.isParent(testAllocation));
+   NASSERT(testAllocation.isParent(slicedAllocation));
+   NASSERT(!testAllocation.isChild(slicedAllocation));
+   NASSERT(sendData == slicedAllocation.read());
+   NASSERT(slicedAllocation.size() != testAllocation.size());
+   NASSERT(slicedAllocation.end() != testAllocation.end());
+
+   uint32 = 0xDEADBEEF;
+   sendData = VarData(uint32);
+   slicedAllocation.write(sendData);
+
+   NASSERT(sendData == slicedAllocation.read());
+
+   uintptr = 0xDEFACED1DEFACED1;
+   sendData = VarData(uintptr);
+
+   NASSERT(sendData != testAllocation.read());
+
+   uintptr = 0xDEFADEADBEEFCED1; // 0xDEFA DEADBEEF CED1
+   sendData = VarData(uintptr);
+
+   NASSERT(sendData == testAllocation.read());
+
+   superSliced = slicedAllocation.slice(slicedAllocation.address()+1, sizeof(uint16_t));
 
    this->assertMessage(L"[*] Finished Allocation tests.");
 }
