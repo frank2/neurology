@@ -197,7 +197,7 @@ bool
 AddressPool::isAssociated
 (const Address &address) const
 {
-   return this->associations.find(const_cast<Address *>(&address)) != this->associations.end();
+   return this->associations.count(const_cast<Address *>(&address)) > 0;
 }
 
 bool

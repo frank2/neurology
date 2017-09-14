@@ -421,13 +421,13 @@ Allocator::repool
    if (newSize == 0)
       throw ZeroSizeException(*this);
 
-   newAddress = this->repoolAddress(address, newSize);
-   this->pooledMemory[newAddress] = newSize;
-
    if (address.usesPool(&this->pooledAddresses))
       baseAddress = address;
    else
       baseAddress = this->pooledAddresses.address(address.label());
+
+   newAddress = this->repoolAddress(address, newSize);
+   this->pooledMemory[newAddress] = newSize;
 
    /* if the address is the same, nothing needs to be done. */
    if (baseAddress == newAddress)
@@ -442,7 +442,8 @@ Allocator::repool
       throw PoolCollisionException(*this, newAddress);
 
    /* otherwise, we're on clean-up duty. */
-   this->addressPools[newAddress] = new AddressPool;
+   this->addressPools[newAddress] = new AddressPool(this->addressPools[baseAddress]->minimum()
+                                                    ,this->addressPools[baseAddress]->maximum());
    this->addressPools[baseAddress]->drain(*this->addressPools[newAddress]);
    
    this->addressPools[newAddress]->rebase(newAddress.label());
@@ -451,10 +452,10 @@ Allocator::repool
    if (this->bindings.count(baseAddress) > 0)
    {
       /* there are bindings to fix */
-      std::set<Allocation *>::iterator allocIter;
+      std::set<Allocation *> allocations(this->bindings[baseAddress]);
 
-      for (allocIter = this->bindings[baseAddress].begin();
-           allocIter != this->bindings[baseAddress].end();
+      for (std::set<Allocation *>::iterator allocIter=allocations.begin();
+           allocIter!=allocations.end();
            ++allocIter)
       {
          this->rebind(*allocIter, newAddress);
@@ -777,6 +778,10 @@ Allocator::rebind
    
    oldAddress = this->associations[allocation];
    delta = localNewAddress - oldAddress;
+
+   /* if the addresses are the same, that's not an error, but there's no point in rebinding */
+   if (delta == 0)
+      return;
    
    this->bindings[localNewAddress].insert(allocation);
    this->bindings[oldAddress].erase(allocation);
@@ -800,15 +805,16 @@ Allocator::rebind
                       ,Address(this->associations.at(*childIter).label() + delta));
       }
    }
-
-   if (this->bindings[oldAddress].size())
+   
+   /* originally this moved the identifier of the old address... don't do that. it causes problems. */
+   if (bindCount == 0)
    {
       this->bindings.erase(oldAddress);
-      this->unpool(oldAddress);
+
+      /* rebind may have been called by repool, which may have already unpooled the prior address. */
+      if (this->isPooled(oldAddress))
+         this->unpool(oldAddress);
    }
-   else
-      /* moves all identifiers in the address's binding to the new address */
-      oldAddress.moveIdentifier(localNewAddress.label());
 }
 
 void

@@ -49,7 +49,7 @@ LocalAllocatorTest::testAllocator
    NASSERT(!allocator.hasChildren(allocation));
 
    allocation = allocator.allocate<std::uintptr_t>();
-   allocAddress = Address(allocator.address(allocation));
+   allocAddress = Address(allocator.address(allocation).label());
 
    NASSERT(allocAddress == allocation.address());
 
