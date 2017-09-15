@@ -144,7 +144,7 @@ namespace Neurology
       typedef std::map<Allocation *, Address> AssociationMap;
       typedef std::map<Allocation *, AllocationSet> ChildMap;
       typedef std::map<Allocation *, Allocation *> ParentMap;
-      
+
    protected:
       bool split;
       bool local;

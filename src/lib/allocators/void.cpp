@@ -398,10 +398,11 @@ Address
 Allocator::address
 (const Allocation &allocation, SIZE_T offset)
 {
-   Address baseAddress;
+   AddressPool *pool;
    
    this->throwIfNotBound(allocation);
-   return this->addressPools[const_cast<Allocation *>(&allocation)]->address(allocation.address().label() + offset);
+   pool = this->addressPools[const_cast<Allocation *>(&allocation)];
+   return pool->address(pool->minimum() + offset);
 }
 
 Address
@@ -415,10 +416,11 @@ Address
 Allocator::newAddress
 (const Allocation &allocation, SIZE_T offset)
 {
-   Address baseAddress;
+   AddressPool *pool;
    
    this->throwIfNotBound(allocation);
-   return this->addressPools[const_cast<Allocation *>(&allocation)]->newAddress(allocation.address().label() + offset);
+   pool = this->addressPools[const_cast<Allocation *>(&allocation)];
+   return pool->newAddress(pool->minimum() + offset);
 }
 
 SIZE_T
@@ -495,16 +497,18 @@ Allocator::repool
       original address? that's weird. */
    if (this->bindings.count(newAddress) > 0)
       throw PoolCollisionException(*this, newAddress);
-
+   
    /* there are bindings to fix */
    if (this->bindings.count(baseAddress) > 0)
    {
       AllocationSet allocations(this->bindings[baseAddress]);
 
-      for (std::set<Allocation *>::iterator allocIter=allocations.begin();
+      for (AllocationSet::iterator allocIter=allocations.begin();
            allocIter!=allocations.end();
            ++allocIter)
       {
+         this->addressPools[*allocIter]->rebase(newAddress.label());
+         this->addressPools[*allocIter]->setMax((newAddress+newSize).label());
          this->rebind(*allocIter, newAddress);
       }
    }
@@ -653,13 +657,7 @@ Allocator::read
    if (this->willSplit(address, size))
       return this->splitRead(address, size);
    else
-   {
-      Allocation &allocation = this->find(address);
-
-      allocation.throwIfInvalid();
-      
-      return this->read(&allocation, address, size);
-   }
+      return this->read(&this->find(address, size), address, size);
 }
 
 void
@@ -671,7 +669,7 @@ Allocator::write
    if (this->willSplit(address, data.size()))
       return this->splitWrite(address, data);
    else
-      return this->write(&this->find(address), address, data);
+      return this->write(&this->find(address, data.size()), address, data);
 }
 
 Allocation &
@@ -814,6 +812,8 @@ Allocator::bind
    BindingMap *bindMap;
    bool rootAlloc;
 
+   this->throwIfBound(*allocation);
+   
    rootAlloc = !this->hasParent(*allocation);
 
    if (rootAlloc)
@@ -822,16 +822,20 @@ Allocator::bind
       this->throwIfNotPooled(address);
    }
    else
+   {
+      Allocation &parent = this->parent(*allocation);
+      parent.throwIfNotInRange(address);
       bindMap = &this->suballocations;
+   }
 
    this->throwIfBound(*allocation);
 
    if (!rootAlloc)
    {
-      if (address.usesPool(this->addressPools.at(allocation->address())))
+      if (address.usesPool(this->addressPools.at(allocation)))
          localAddress = address;
       else
-         localAddress = this->addressPools.at(allocation->address())->address(address.label());
+         localAddress = this->addressPools.at(allocation)->address(address.label());
    }
    else if (address.usesPool(&this->pooledAddresses))
       localAddress = address;
@@ -841,11 +845,11 @@ Allocator::bind
    (*bindMap)[localAddress].insert(allocation);
    allocation->allocator = this;
 
-   /* if we don't have an address pool, we're probably pooled memory. if we're not,
-      that's an exception. */
-   if (this->addressPools.count(allocation) == 0)
+   /* we might be coming from spawn(), who handles creating new addresses for
+      suballocations */
+   if (this->isPooled(address) && this->addressPools.count(allocation) == 0)
       this->addressPools[allocation] = new AddressPool(localAddress.label()
-                                                         ,localAddress.label() + this->pooledMemory[address]);
+                                                       ,localAddress.label() + this->pooledMemory[address]);
 
    this->associations[allocation] = localAddress;
 }
@@ -871,14 +875,18 @@ Allocator::rebind
       this->throwIfNotPooled(newAddress);
    }
    else
+   {
+      Allocation &parent = this->parent(*allocation);
+      parent.throwIfNotInRange(newAddress);
       bindMap = &this->suballocations;
+   }
 
    if (this->hasParent(*allocation))
    {
-      if (newAddress.usesPool(this->addressPools.at(allocation->address())))
+      if (newAddress.usesPool(this->addressPools.at(allocation)))
          localNewAddress = newAddress;
       else
-         localNewAddress = this->addressPools.at(allocation->address())->address(newAddress.label());
+         localNewAddress = this->addressPools.at(allocation)->address(newAddress.label());
    }
    else if (newAddress.usesPool(&this->pooledAddresses))
       localNewAddress = newAddress;
@@ -899,19 +907,21 @@ Allocator::rebind
    if (this->addressPools.count(allocation) == 0)
       this->addressPools[allocation] = new AddressPool(localNewAddress.label()
                                                        ,localNewAddress.label() + allocation->size());
+   else
+      this->addressPools[allocation]->rebase(localNewAddress.label());
 
    this->associations[allocation] = localNewAddress;
    
    if (this->hasChildren(*allocation))
    {
-      std::set<Allocation *>::iterator childIter;
+      AllocationSet::iterator childIter;
 
       for (childIter = this->children.at(const_cast<Allocation *>(allocation)).begin();
            childIter != this->children.at(const_cast<Allocation *>(allocation)).end();
            ++childIter)
       {
-         this->rebind(*childIter
-                      ,Address(this->associations.at(*childIter).label() + delta));
+         Address newAddress = Address(this->associations.at(*childIter).label() + delta);
+         this->rebind(*childIter, newAddress);
       }
    }
    
@@ -932,7 +942,6 @@ Allocator::unbind
 (Allocation *allocation)
 {
    Address boundAddress;
-   Allocation *parent;
    BindingMap *bindMap;
    
    this->throwIfNotBound(*allocation);
@@ -960,6 +969,12 @@ Allocator::unbind
 
    (*bindMap)[boundAddress].erase(allocation);
    this->associations.erase(allocation);
+
+   if (this->addressPools.count(allocation))
+   {
+      delete this->addressPools[allocation];
+      this->addressPools.erase(allocation);
+   }
    
    if ((*bindMap)[boundAddress].size() != 0)
       return;
@@ -1174,12 +1189,10 @@ Allocator::spawn
    allocation->throwIfNotInRange(address, size);
 
    newAllocation = this->null();
-   baseAddress = allocation->address(address.label());
+   baseAddress = allocation->address(allocation->offset(address));
    this->addChild(const_cast<Allocation *>(allocation), &newAllocation);
-
-   if (this->addressPools.count(baseAddress) == 0)
-      this->addressPools[baseAddress] = new AddressPool(baseAddress.label()
-                                                        ,baseAddress.label()+size);
+   this->addressPools[&newAllocation] = new AddressPool(address.label()
+                                                        ,address.label()+size);
 
    this->bind(&newAllocation, baseAddress);
 
@@ -1766,6 +1779,9 @@ Allocation::clone
 (const Allocation &allocation)
 {
    allocation.throwIfInvalid();
+
+   if (this->allocator == NULL)
+      this->allocator = allocation.allocator;
 
    if (this->size() != allocation.size())
       this->reallocate(allocation.size());

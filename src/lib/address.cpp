@@ -433,6 +433,9 @@ AddressPool::shift
    std::set<Address> snapshot;
    std::set<Address>::iterator snapIter;
 
+   if (shift == 0)
+      return;
+
    snapshot = this->pool();
 
    for (snapIter=snapshot.begin(); snapIter!=snapshot.end(); ++snapIter)
@@ -456,6 +459,9 @@ AddressPool::rebase
    if (newBase > newMax)
       throw BadRangeException(*this, newBase, newMax);
 
+   if (delta == 0)
+      return;
+   
    /* create a temporary range that will include the new base as well as the
       old base, allowing everything to be moved freely. */
    this->minLabel = min(newBase, this->minLabel);

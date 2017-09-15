@@ -212,7 +212,7 @@ LocalAllocatorTest::testAllocation
    NASSERT(sendData == testAllocation.read(testAllocation.address(), 4));
    NASSERT(sendData == testAllocation.read(testAllocation.address()+4, 4));
 
-   clonedAllocation.clone(testAllocation);
+   clonedAllocation.clone(testAllocation);	
 
    NASSERT(!allocator->sharesPool(testAllocation, clonedAllocation));
    NASSERT(!clonedAllocation.isChild(testAllocation));
@@ -275,20 +275,20 @@ LocalAllocatorTest::testAllocation
    NASSERT(slicedAllocation.end() != superSliced.end());
 
    uint16 = 0xDEAD;
-   sendData = VarData(unit16);
+   sendData = VarData(uint16);
    superSliced.write(sendData);
 
    NASSERT(sendData == superSliced.read());
 
-   uint32 = 0xDEDEADEF; // 0xDEFA DE DEAD EF ECED1
+   uint32 = 0xDEDEADEF; // 0xDEFA DE DEAD EF CED1
    sendData = VarData(uint32);
 
    NASSERT(sendData == slicedAllocation.read());
 
-   uintptr = 0xDEFADEDEADEFECED1;
+   uintptr = 0xDEFADEDEADEFCED1;
    sendData = VarData(uintptr);
 
-   NASSERT(sendData == allocation.read());
+   NASSERT(sendData == testAllocation.read());
 
    this->assertMessage(L"[*] Finished Allocation tests.");
 }
