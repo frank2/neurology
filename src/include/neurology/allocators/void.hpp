@@ -2,6 +2,7 @@
 
 #include <windows.h>
 
+#include <list>
 #include <map>
 #include <set>
 #include <vector>
@@ -136,11 +137,12 @@ namespace Neurology
          AddressNotFoundException(Allocator &allocator, Address &address);
       };
 
+      typedef std::set<Allocation *> AllocationSet;
       typedef std::map<Address, SIZE_T> MemoryPool;
-      typedef std::map<Address, AddressPool *> AddressPoolMap;
+      typedef std::map<Address, AllocationSet> BindingMap;
+      typedef std::map<Allocation *, AddressPool *> AddressPoolMap;
       typedef std::map<Allocation *, Address> AssociationMap;
-      typedef std::map<Address, std::set<Allocation *> > BindingMap;
-      typedef std::map<Allocation *, std::set<Allocation *> > ChildMap;
+      typedef std::map<Allocation *, AllocationSet> ChildMap;
       typedef std::map<Allocation *, Allocation *> ParentMap;
       
    protected:
@@ -149,9 +151,9 @@ namespace Neurology
       
       AddressPool pooledAddresses;
       MemoryPool pooledMemory;
+      BindingMap bindings, suballocations;
       AddressPoolMap addressPools;
       AssociationMap associations;
-      BindingMap bindings;
       ChildMap children;
       ParentMap parents;
 
@@ -195,7 +197,8 @@ namespace Neurology
       Address repool(Address &address, SIZE_T newSize);
       void unpool(Address &address);
       
-      virtual Allocation &find(const Address &address) const;
+      Allocation &find(const Address &address) const;
+      virtual Allocation &find(const Address &address, SIZE_T size) const;
 
       virtual Allocation null(void);
       virtual Allocation null(void) const;
@@ -238,7 +241,7 @@ namespace Neurology
       Allocation &root(const Allocation &allocation) const;
       Allocation &parent(const Allocation &allocation);
       const Allocation &parent(const Allocation &allocation) const;
-      std::set<const Allocation *> getChildren(const Allocation &allocation);
+      std::set<const Allocation *> getChildren(const Allocation &allocation) const;
       
    protected:
       virtual Address poolAddress(SIZE_T size);

@@ -24,7 +24,7 @@ LocalAllocatorTest::testAllocator
 (FailVector *failures)
 {
    LocalAllocator allocator;
-   Allocation allocation, otherAlloc;
+   Allocation allocation, otherAlloc, foundAlloc;
    Address allocAddress, cmpAddress;
    std::uintptr_t uintptr = 0xDEADBEEFDEFACED1;
    Data writeData, recvData;
@@ -80,6 +80,12 @@ LocalAllocatorTest::testAllocator
 
    NASSERT(allocator.querySize(allocation) == sizeof(std::uintptr_t)*4);
    NASSERT(allocator.querySize(otherAlloc) == sizeof(std::uintptr_t)*4);
+
+   foundAlloc = allocator.find(allocation.address()+sizeof(std::uintptr_t));
+
+   NASSERT(allocator.sharesPool(allocation, foundAlloc));
+
+   foundAlloc.deallocate(); // just gets rid of the foundAlloc copy, does no deallocation
 
    allocAddress = Address(allocation.address().label());
    allocator.write(allocAddress, writeData);
@@ -248,6 +254,41 @@ LocalAllocatorTest::testAllocation
    NASSERT(sendData == testAllocation.read());
 
    superSliced = slicedAllocation.slice(slicedAllocation.address()+1, sizeof(uint16_t));
+
+   NASSERT(allocator->sharesPool(testAllocation, slicedAllocation));
+   NASSERT(allocator->sharesPool(slicedAllocation, superSliced));
+   NASSERT(allocator->sharesPool(superSliced, testAllocation));
+   NASSERT(superSliced.isChild(slicedAllocation));
+   NASSERT(!superSliced.isChild(testAllocation));
+   NASSERT(slicedAllocation.isParent(superSliced));
+   NASSERT(!slicedAllocation.isChild(superSliced));
+   NASSERT(slicedAllocation.isChild(testAllocation));
+   NASSERT(!slicedAllocation.isParent(testAllocation));
+   NASSERT(testAllocation.isParent(slicedAllocation));
+   NASSERT(!testAllocation.isChild(slicedAllocation));
+
+   uint16 = 0xADBE; // 0xDEFADE ADBE EFCED1
+   sendData = VarData(uint16);
+   
+   NASSERT(sendData == superSliced.read());
+   NASSERT(slicedAllocation.size() != superSliced.size());
+   NASSERT(slicedAllocation.end() != superSliced.end());
+
+   uint16 = 0xDEAD;
+   sendData = VarData(unit16);
+   superSliced.write(sendData);
+
+   NASSERT(sendData == superSliced.read());
+
+   uint32 = 0xDEDEADEF; // 0xDEFA DE DEAD EF ECED1
+   sendData = VarData(uint32);
+
+   NASSERT(sendData == slicedAllocation.read());
+
+   uintptr = 0xDEFADEDEADEFECED1;
+   sendData = VarData(uintptr);
+
+   NASSERT(sendData == allocation.read());
 
    this->assertMessage(L"[*] Finished Allocation tests.");
 }
