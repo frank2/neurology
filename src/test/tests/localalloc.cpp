@@ -135,7 +135,6 @@ LocalAllocatorTest::testAllocation
    
    NASSERT(testAllocation.isNull());
    NASSERT(!testAllocation.isBound());
-   NASSERT(!testAllocation.isValid());
    NASSERT(!testAllocation.isLocal()); // not bound to anything, can't be local
    // never allocated from anything, frankly
    NASSERT(!testAllocation.allocatedFrom(allocator));
@@ -146,7 +145,6 @@ LocalAllocatorTest::testAllocation
    
    NASSERT(testAllocation.isNull());
    NASSERT(!testAllocation.isBound());
-   NASSERT(!testAllocation.isValid());
    NASSERT(testAllocation.isLocal());
    NASSERT(testAllocation.allocatedFrom(allocator));
    NASSERT(!testAllocation.inRange(0));
@@ -157,7 +155,6 @@ LocalAllocatorTest::testAllocation
 
    NASSERT(!testAllocation.isNull());
    NASSERT(testAllocation.isBound());
-   NASSERT(testAllocation.isValid());
    NASSERT(testAllocation.allocatedFrom(allocator));
    
    NASSERT(testAllocation.inRange(0));

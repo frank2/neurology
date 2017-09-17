@@ -30,26 +30,23 @@ AddressTest::testAddressPool
    this->assertMessage(L"[*] Testing AddressPool objects.");
 
    NASSERT(!basicPool.hasLabel(0xDEADBEEF));
-   NASSERT(!basicPool.isAssociated(addressObj));
    NASSERT(!basicPool.isBound(addressObj));
    
    addressObj = basicPool.address(0xDEADBEEF);
 
    NASSERT(basicPool.hasLabel(0xDEADBEEF));
-   NASSERT(basicPool.isAssociated(addressObj));
    NASSERT(basicPool.isBound(addressObj));
    
    basicPool.drain(drainagePool);
 
-   NASSERT(!basicPool.isAssociated(addressObj));
-   NASSERT(drainagePool.isAssociated(addressObj));
+   NASSERT(!basicPool.isBound(addressObj));
+   NASSERT(drainagePool.isBound(addressObj));
 
    drainagePool.drain(basicPool);
 
    compAddrObj = basicPool.newAddress(0xDEADBEEF);
 
-   NASSERT(!basicPool.sharesIdentifier(addressObj, compAddrObj));
-   NASSERT(basicPool.getLabel(addressObj) == 0xDEADBEEF);
+   NASSERT(!basicPool.sharesIdentity(addressObj, compAddrObj));
 
    basicPool.shift(5);
    NASSERT(addressObj.label() == 0xDEADBEEF+5);
@@ -60,7 +57,7 @@ AddressTest::testAddressPool
 
    x86Pool.setRange(0x400000, 0x401000);
 
-   NASSERT(!x86Pool.isAssociated(addressObj)); // setRange should have nuked it
+   NASSERT(!x86Pool.isBound(addressObj)); // setRange should have nuked it
    NASSERT(x86Pool.size() == 0x1000);
 
    x86Pool.rebase(0x690000); // nice
@@ -125,18 +122,18 @@ AddressTest::testAddress
    targetAddress = Address(basicAddress.label());
    pivotAddress = Address(targetAddress.label());
 
-   NASSERT(targetAddress.sharesIdentifier(pivotAddress));
+   NASSERT(targetAddress.sharesIdentity(pivotAddress));
    
    targetAddress.move(targetAddress.label()+8);
 
-   NASSERT(!targetAddress.sharesIdentifier(pivotAddress));
+   NASSERT(!targetAddress.sharesIdentity(pivotAddress));
    NASSERT(targetAddress != pivotAddress);
 
    targetAddress = Address(basicAddress.label());
    pivotAddress = targetAddress;
-   targetAddress.moveIdentifier(targetAddress.label()+8);
+   targetAddress.moveIdentity(targetAddress.label()+8);
 
-   NASSERT(targetAddress.sharesIdentifier(pivotAddress));
+   NASSERT(targetAddress.sharesIdentity(pivotAddress));
    NASSERT(targetAddress == pivotAddress);
 
    this->assertMessage(L"[*] Address test completed.");

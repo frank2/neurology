@@ -828,15 +828,8 @@ Allocator::bind
       bindMap = &this->suballocations;
    }
 
-   this->throwIfBound(*allocation);
-
    if (!rootAlloc)
-   {
-      if (address.usesPool(this->addressPools.at(allocation)))
-         localAddress = address;
-      else
-         localAddress = this->addressPools.at(allocation)->address(address.label());
-   }
+      localAddress = this->addressPools.at(&this->parent(*allocation))->address(address.label());
    else if (address.usesPool(&this->pooledAddresses))
       localAddress = address;
    else
@@ -847,7 +840,7 @@ Allocator::bind
 
    /* we might be coming from spawn(), who handles creating new addresses for
       suballocations */
-   if (this->isPooled(address) && this->addressPools.count(allocation) == 0)
+   if (this->addressPools.count(allocation) == 0)
       this->addressPools[allocation] = new AddressPool(localAddress.label()
                                                        ,localAddress.label() + this->pooledMemory[address]);
 
@@ -976,7 +969,7 @@ Allocator::unbind
       this->addressPools.erase(allocation);
    }
    
-   if ((*bindMap)[boundAddress].size() != 0)
+   if (bindMap->count(boundAddress) > 0 && (*bindMap)[boundAddress].size() != 0)
       return;
    
    bindMap->erase(boundAddress);
@@ -1282,8 +1275,9 @@ Allocation::Allocation
 
 Allocation::Allocation
 (Allocation &allocation)
+   : allocator(allocation.allocator)
 {
-   if (allocation.isValid())
+   if (allocation.isBound())
       this->copy(allocation);
 }
 
@@ -1311,12 +1305,12 @@ Allocation::operator=
 {
    this->allocator = allocation.allocator;
 
-   if (allocation.isValid())
+   if (allocation.isBound())
       this->copy(allocation);
-   else if (!this->isValid() && allocation.allocator != NULL)
+   else if (!this->isBound() && allocation.allocator != NULL)
       this->allocator = allocation.allocator;
    else
-      this->throwIfInvalid();
+      this->throwIfNotBound();
 }
    
 void
@@ -1325,10 +1319,10 @@ Allocation::operator=
 {
    this->allocator = allocation->allocator;
    
-   if (allocation->isValid())
+   if (allocation->isBound())
       this->clone(*allocation);
    else
-      this->throwIfInvalid();
+      this->throwIfNotBound();
 }
 
 Address
@@ -1357,13 +1351,6 @@ Allocation::isBound
 (void) const
 {
    return !this->isNull() && this->allocator->isBound(*this);
-}
-
-bool
-Allocation::isValid
-(void) const
-{
-   return this->isBound() && this->allocator->isPooled(this->allocator->addressOf(*this));
 }
 
 bool
@@ -1423,35 +1410,35 @@ bool
 Allocation::sharesPool
 (const Allocation &allocation) const
 {
-   return this->isValid() && this->allocator->sharesPool(*this, allocation);
+   return this->isBound() && this->allocator->sharesPool(*this, allocation);
 }
 
 bool
 Allocation::hasParent
 (void) const
 {
-   return this->isValid() && this->allocator->hasParent(*this);
+   return this->isBound() && this->allocator->hasParent(*this);
 }
 
 bool
 Allocation::hasChildren
 (void) const
 {
-   return this->isValid() && this->allocator->hasChildren(*this);
+   return this->isBound() && this->allocator->hasChildren(*this);
 }
 
 bool
 Allocation::isChild
 (const Allocation &parent) const
 {
-   return this->isValid() && this->allocator->isChild(parent, *this);
+   return this->isBound() && this->allocator->isChild(parent, *this);
 }
 
 bool
 Allocation::isParent
 (const Allocation &child) const
 {
-   return this->isValid() && this->allocator->isChild(*this, child);
+   return this->isBound() && this->allocator->isChild(*this, child);
 }
 
 void
@@ -1463,20 +1450,18 @@ Allocation::throwIfNoAllocator
 }
 
 void
-Allocation::throwIfInvalid
+Allocation::throwIfNotBound
 (void) const
 {
-   if (this->isValid())
+   if (this->isBound())
       return;
 
    if (this->allocator == NULL)
       throw NoAllocatorException(*this);
    if (this->isNull())
       throw DeadAllocationException(*this);
-   if (this->size() == 0)
-      throw ZeroSizeException(*this);
 
-   this->allocator->throwIfNotPooled(this->baseAddress());
+   this->allocator->throwIfNotAssociated(*this);
 }
 
 void
@@ -1527,7 +1512,7 @@ Address
 Allocation::address
 (void)
 {
-   this->throwIfInvalid();
+   this->throwIfNotBound();
    
    return this->allocator->address(*this);
 }
@@ -1536,7 +1521,7 @@ const Address
 Allocation::address
 (void) const
 {
-   this->throwIfInvalid();
+   this->throwIfNotBound();
 
    return this->allocator->address(*this);
 }
@@ -1545,7 +1530,7 @@ Address
 Allocation::address
 (SIZE_T offset)
 {
-   this->throwIfInvalid();
+   this->throwIfNotBound();
    
    return this->allocator->address(*this, offset);
 }
@@ -1554,7 +1539,7 @@ const Address
 Allocation::address
 (SIZE_T offset) const
 {
-   this->throwIfInvalid();
+   this->throwIfNotBound();
 
    return this->allocator->address(*this, offset);
 }
@@ -1563,7 +1548,7 @@ Address
 Allocation::newAddress
 (void)
 {
-   this->throwIfInvalid();
+   this->throwIfNotBound();
    
    return this->allocator->newAddress(*this);
 }
@@ -1572,7 +1557,7 @@ const Address
 Allocation::newAddress
 (void) const
 {
-   this->throwIfInvalid();
+   this->throwIfNotBound();
 
    return this->allocator->newAddress(*this);
 }
@@ -1581,7 +1566,7 @@ Address
 Allocation::newAddress
 (SIZE_T offset)
 {
-   this->throwIfInvalid();
+   this->throwIfNotBound();
    
    return this->allocator->newAddress(*this, offset);
 }
@@ -1590,7 +1575,7 @@ const Address
 Allocation::newAddress
 (SIZE_T offset) const
 {
-   this->throwIfInvalid();
+   this->throwIfNotBound();
 
    return this->allocator->newAddress(*this, offset);
 }
@@ -1657,7 +1642,7 @@ Allocation::allocate
 {
    this->throwIfNoAllocator();
    
-   if (this->isValid())
+   if (this->isBound())
       throw DoubleAllocationException(*this);
 
    this->allocator->allocate(this, size);
@@ -1667,7 +1652,7 @@ void
 Allocation::reallocate
 (SIZE_T size)
 {
-   if (!this->isValid())
+   if (!this->isBound())
       return this->allocate(size);
 
    /* repooling should automatically rebind this object */
@@ -1678,7 +1663,7 @@ void
 Allocation::deallocate
 (void)
 {
-   this->throwIfInvalid();
+   this->throwIfNotBound();
    this->allocator->throwIfNotBound(*this);
    this->allocator->unbind(this);
 }
@@ -1716,7 +1701,7 @@ Data
 Allocation::read
 (const Address &address, SIZE_T size) const
 {
-   this->throwIfInvalid();
+   this->throwIfNotBound();
    this->throwIfNotInRange(address);
    
    if (this->allocator->willSplit(address, size))
@@ -1751,7 +1736,7 @@ void
 Allocation::write
 (Address &destAddress, const Data data)
 {
-   this->throwIfInvalid();
+   this->throwIfNotBound();
    this->throwIfNotInRange(destAddress);
    
    if (this->allocator->willSplit(destAddress, data.size()))
@@ -1764,9 +1749,17 @@ void
 Allocation::copy
 (Allocation &allocation)
 {
-   allocation.throwIfInvalid();
+   allocation.throwIfNotBound();
 
+   if (this->hasParent())
+      this->allocator->disownChild(this);
+   
    this->allocator = allocation.allocator;
+
+   if (allocation.hasParent())
+      this->allocator->addChild(&allocation.parent(), this);
+
+   /* don't copy the children though-- those belong to the other allocation, not us */
 
    if (this->isBound())
       this->allocator->rebind(this, allocation.address());
@@ -1778,7 +1771,7 @@ void
 Allocation::clone
 (const Allocation &allocation)
 {
-   allocation.throwIfInvalid();
+   allocation.throwIfNotBound();
 
    if (this->allocator == NULL)
       this->allocator = allocation.allocator;
@@ -1793,7 +1786,7 @@ Allocation
 Allocation::slice
 (const Address &address, SIZE_T size)
 {
-   this->throwIfInvalid();
+   this->throwIfNotBound();
 
    return this->allocator->spawn(this, address, size);
 }
@@ -1802,7 +1795,7 @@ Allocation &
 Allocation::root
 (void) const
 {
-   this->throwIfInvalid();
+   this->throwIfNotBound();
 
    return this->allocator->root(*this);
 }
@@ -1811,7 +1804,7 @@ Allocation &
 Allocation::parent
 (void)
 {
-   this->throwIfInvalid();
+   this->throwIfNotBound();
 
    return this->allocator->parent(*this);
 }
@@ -1820,7 +1813,7 @@ const Allocation &
 Allocation::parent
 (void) const
 {
-   this->throwIfInvalid();
+   this->throwIfNotBound();
 
    return this->allocator->parent(*this);
 }
@@ -1829,7 +1822,7 @@ std::set<const Allocation *>
 Allocation::children
 (void) const
 {
-   this->throwIfInvalid();
+   this->throwIfNotBound();
 
    return this->allocator->getChildren(*this);
 }

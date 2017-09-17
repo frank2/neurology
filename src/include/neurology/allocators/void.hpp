@@ -14,6 +14,12 @@
 #define PointerData(ptr) BlockData(ptr, sizeof(*ptr))
 #define VarData(var) PointerData(&var)
 
+/*
+  development notes for allocations and allocators:
+
+  bind typically has three entrypoints: allocate, spawn and copy
+*/
+
 namespace Neurology
 {
    typedef std::vector<BYTE> Data;
@@ -355,7 +361,6 @@ namespace Neurology
 
       bool isNull(void) const;
       bool isBound(void) const;
-      bool isValid(void) const;
       bool isLocal(void) const;
       bool allocatedFrom(const Allocator *allocator) const;
       bool inRange(SIZE_T offset) const;
@@ -369,7 +374,7 @@ namespace Neurology
       bool isParent(const Allocation &child) const;
 
       void throwIfNoAllocator(void) const;
-      void throwIfInvalid(void) const;
+      void throwIfNotBound(void) const;
       void throwIfNotInRange(SIZE_T offset) const;
       void throwIfNotInRange(SIZE_T offset, SIZE_T size) const;
       void throwIfNotInRange(const Address &address) const;

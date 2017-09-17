@@ -111,27 +111,8 @@ public:
 namespace Neurology
 {
    typedef std::uintptr_t Label;
-   typedef Label *Identifier;
+   typedef Label *Identity;
 
-   /* my apologies for a completely pointer-hostile address object system. 
-      the code is designed the way it is for a specific reason. it's intentionally
-      less dynamic than std::shared_ptr, but it operates as if the pointers are 
-      not only not typed, but merely numeric labels.
-
-      there is a reason for this. it will be common in use-cases of Neurology for
-      you to know an address, but not have local access to it-- for it would be
-      in *another* process. this means the address must be agnostic to whether or
-      not you're tied to local memory. in addition to this, Addresses are designed
-      to be passed around willy-nilly with no worry as to where they are. but at
-      the same time, since an address can move out from under you as in the cases
-      of memory allocation, they're designed so that the base pointer all Address
-      objects wind up pointing to can be moved arbitrarily without too much trouble.
-
-      if you've gone this far in the code, hey, congrats, welcome to the darkness,
-      I'll be your angler fish. but it's very likely you didn't mean to go this far.
-
-      check out <neurology/pointer.hpp>.
-   */
    class Address;
 
    class AddressPool
@@ -147,10 +128,10 @@ namespace Neurology
          Exception(AddressPool &pool, LPWSTR message);
       };
 
-      class NullIdentifierException : public Exception
+      class NullIdentityException : public Exception
       {
       public:
-         NullIdentifierException(AddressPool &pool);
+         NullIdentityException(AddressPool &pool);
       };
 
       class AddressAlreadyBoundException : public Exception
@@ -161,20 +142,20 @@ namespace Neurology
          AddressAlreadyBoundException(AddressPool &pool, Address &address);
       };
 
-      class IdentifierAlreadyLabeledException : public Exception
+      class IdentityAlreadyLabeledException : public Exception
       {
       public:
-         const Identifier identity;
+         const Identity identity;
 
-         IdentifierAlreadyLabeledException(AddressPool &pool, const Identifier identity);
+         IdentityAlreadyLabeledException(AddressPool &pool, const Identity identity);
       };
 
-      class IdentifierNotLabeledException : public Exception
+      class IdentityNotLabeledException : public Exception
       {
       public:
-         const Identifier identity;
+         const Identity identity;
 
-         IdentifierNotLabeledException(AddressPool &pool, const Identifier identity);
+         IdentityNotLabeledException(AddressPool &pool, const Identity identity);
       };
 
       class NoSuchLabelException : public Exception
@@ -201,12 +182,12 @@ namespace Neurology
          AddressNotBoundException(AddressPool &pool, Address &address);
       };
 
-      class NoSuchIdentifierException : public Exception
+      class NoSuchIdentityException : public Exception
       {
       public:
-         const Identifier identity;
+         const Identity identity;
 
-         NoSuchIdentifierException(AddressPool &pool, const Identifier identity);
+         NoSuchIdentityException(AddressPool &pool, const Identity identity);
       };
 
       class BadRangeException : public Exception
@@ -226,24 +207,23 @@ namespace Neurology
       };
       
    protected:
-      /* a label can have multiple identities */
-      typedef std::map<Label, std::set<Identifier> > LabelMap;
+      typedef std::set<Address *> AddressSet;
+      typedef std::set<Identity> IdentitySet;
+      
+      /* one label can have multiple identities */
+      typedef std::map<const Label, IdentitySet> LabelMap;
 
-      /* an identity can have multiple address objects */
-      typedef std::map<Identifier, std::set<Address *> > BindingMap;
-
-      /* identities aren't directly accessible by address objects. the association map assists this. */
-      typedef std::map<Address *, Identifier> AssociationMap;
+      /* one identity can have multiple addresses */
+      typedef std::map<const Identity, AddressSet> BindingMap;
       
    public:
       static AddressPool Instance;
 
    protected:
       Label minLabel, maxLabel;
-      std::set<Identifier> identities;
+      IdentitySet identities;
       LabelMap labels;
       BindingMap bindings;
-      AssociationMap associations;
 
    public:
       AddressPool(void);
@@ -252,18 +232,17 @@ namespace Neurology
       ~AddressPool(void);
 
       void drain(AddressPool &targetPool);
-      std::set<Address> pool(void);
+      std::set<Address *> pool(void) const;
 
       bool hasLabel(const LPVOID pointer) const;
       bool hasLabel(Label label) const;
-      bool isAssociated(const Address &address) const;
       bool isBound(const Address &address) const;
       bool inRange(Label label) const;
-      bool sharesIdentifier(const Address &first, const Address &second) const;
+      bool hasIdentity(const Identity identity) const;
+      bool sharesIdentity(const Address &left, const Address &right) const;
 
       void throwIfNoLabel(const LPVOID pointer) const;
       void throwIfNoLabel(Label label) const;
-      void throwIfNotAssociated(const Address &address) const;
       void throwIfNotBound(const Address &address) const;
       void throwIfNotInRange(Label label) const;
 
@@ -281,36 +260,31 @@ namespace Neurology
       Address newAddress(const LPVOID pointer);
       Address newAddress(Label label);
 
-      Label getLabel(const Address &address) const;
-
-      void move(const Address &address, const LPVOID pointer);
-      void move(const Address &address, Label label);
+      void move(Address &address, const LPVOID pointer);
+      void move(Address &address, Label label);
       void move(Label priorLabel, Label newLabel);
       void shift(std::intptr_t shift);
       void rebase(Label newBase);
 
    protected:
-      bool hasIdentifier(const Identifier pointer) const;
-
-      void throwIfNoIdentifier(const Identifier identity) const;
+      void throwIfNoIdentity(const Identity identity) const;
       
-      Identifier getIdentifier(const LPVOID pointer) const;
-      Identifier getIdentifier(Label label) const;
-      Identifier newIdentifier(const LPVOID pointer);
-      Identifier newIdentifier(Label label);
-      void releaseIdentifier(Identifier pointer);
+      Identity getIdentity(const LPVOID pointer) const;
+      Identity getIdentity(Label label) const;
+      Identity newIdentity(const LPVOID pointer);
+      Identity newIdentity(Label label);
+      void releaseIdentity(Identity identity);
 
-      Address newAddress(Identifier pointer);
-      Identifier getAssociation(const Address *address) const;
+      Address newAddress(Identity identity);
 
-      void bind(const Address *address, const Identifier pointer);
-      void rebind(const Address *address, const Identifier newIdentifier);
+      void bind(Address *address, Identity identity);
+      void rebind(Address *address, Identity newIdentity);
       void unbind(Address *address);
       void unbindOutOfBounds(void);
       
-      void identify(Identifier identity, Label label);
-      void reidentify(Identifier identity, Label newLabel);
-      void unidentify(Identifier identity);
+      void identify(Identity identity, Label label);
+      void reidentify(Identity identity, Label newLabel);
+      void unidentify(Identity identity);
    };
 
    class Address
@@ -332,6 +306,12 @@ namespace Neurology
          NoPoolException(Address &address);
       };
 
+      class NullIdentityException : public Exception
+      {
+      public:
+         NullIdentityException(Address &address);
+      };
+
       class AddressUnderflowException : public Exception
       {
       public:
@@ -350,6 +330,7 @@ namespace Neurology
       
    protected:
       AddressPool *pool;
+      Identity identity;
 
       /* constructors for AddressPool objects to use */
       Address(AddressPool *pool);
@@ -362,14 +343,22 @@ namespace Neurology
       Address(const Address &address);
       ~Address(void);
 
+      operator Label(void) const;
+
       void operator=(const Address &address);
 
       bool operator<(const Address &address) const;
+      bool operator<(Label label) const;
       bool operator>(const Address &address) const;
+      bool operator>(Label label) const;
       bool operator==(const Address &address) const;
+      bool operator==(Label label) const;
       bool operator!=(const Address &address) const;
+      bool operator!=(Label label) const;
       bool operator<=(const Address &address) const;
+      bool operator<=(Label label) const;
       bool operator>=(const Address &address) const;
+      bool operator>=(Label label) const;
 
       Address operator+(std::intptr_t shift) const;
       Address operator+(std::uintptr_t shift) const;
@@ -392,8 +381,9 @@ namespace Neurology
       bool isNull(void) const;
       bool usesPool(const AddressPool *pool) const;
       bool inRange(void) const;
-      bool sharesIdentifier(const Address &address) const;
+      bool sharesIdentity(const Address &address) const;
 
+      void throwIfNull(void) const;
       void throwIfNoPool(void) const;
       void throwIfNotInRange(void) const;
 
@@ -401,16 +391,13 @@ namespace Neurology
       const AddressPool *getPool(void) const;
       void setPool(AddressPool *pool);
       
-      virtual Label label(void) const;
+      Label label(void) const;
       void move(const LPVOID pointer);
       void move(Label newLabel);
-      void moveIdentifier(const LPVOID pointer);
-      void moveIdentifier(Label label);
+      void moveIdentity(const LPVOID pointer);
+      void moveIdentity(Label label);
 
       Address copy(void) const;
-
-   protected:
-      const Identifier getAssociation(void) const;
    };
 
    class Offset : public Address
