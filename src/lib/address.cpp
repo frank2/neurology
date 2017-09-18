@@ -188,49 +188,45 @@ AddressPool::pool
 
 bool
 AddressPool::hasLabel
-(const LPVOID pointer) const
+(const LPVOID pointer) const noexcept
 {
    return this->hasLabel(reinterpret_cast<Label>(pointer));
 }
 
 bool
 AddressPool::hasLabel
-(Label label) const
+(Label label) const noexcept
 {
    return this->labels.count(label) > 0;
 }
 
 bool
 AddressPool::isBound
-(const Address &address) const
+(const Address &address) const noexcept
 {
-   AddressPool::BindingMap::const_iterator bindingIter;
-
-   bindingIter = this->bindings.find(address.identity);
-
-   if (bindingIter == this->bindings.end())
+   if (this->bindings.count(address.identity) == 0)
       return false;
 
-   return bindingIter->second.find(const_cast<Address *>(&address)) != bindingIter->second.end();
+   return this->bindings.at(address.identity).find(const_cast<Address *>(&address)) != this->bindings.at(address.identity).end();
 }
 
 bool
 AddressPool::inRange
-(Label label) const
+(Label label) const noexcept
 {
    return label >= this->minLabel && label <= this->maxLabel;
 }
 
 bool
 AddressPool::hasIdentity
-(const Identity identity) const
+(const Identity identity) const noexcept
 {
    return this->identities.find(const_cast<Identity>(identity)) != this->identities.end();
 }
 
 bool
 AddressPool::sharesIdentity
-(const Address &first, const Address &second) const
+(const Address &first, const Address &second) const noexcept
 {
    if (!this->isBound(first) || !this->isBound(second))
       return false;
@@ -596,28 +592,28 @@ AddressPool::unbindOutOfBounds
 (void)
 {
    BindingMap::iterator bindIter;
+   AddressSet killSet;
 
-   bindIter = this->bindings.begin();
-
-   while (bindIter != this->bindings.end())
+   for (bindIter=this->bindings.begin();
+        bindIter!=this->bindings.end();
+        ++bindIter)
    {
       if (this->inRange(*bindIter->first))
-      {
-         ++bindIter;
          continue;
-      }
 
-      /* if we unbind the address, we lose our iterator. compensate for this. */
-      const Identity prev = bindIter->first;
-      ++bindIter;
-      const Identity next = (bindIter != this->bindings.end()) ? bindIter->first : NULL;
-      
-      /* this one's not in range, kill it. */
-      this->unidentify(const_cast<Identity>(bindIter->first));
-
-      if (next != NULL)
-         bindIter = this->bindings.find(next);
+      for (AddressSet::iterator addrIter=bindIter->second.begin();
+           addrIter!=bindIter->second.end();
+           ++addrIter)
+         killSet.insert(*addrIter);
    }
+
+   if (killSet.size() == 0)
+      return;
+
+   for (AddressSet::iterator killIter=killSet.begin();
+        killIter!=killSet.end();
+        ++killIter)
+      this->unbind(*killIter);
 }
 
 void
@@ -1091,35 +1087,35 @@ Address::pointer
 
 bool
 Address::hasPool
-(void) const
+(void) const noexcept
 {
    return this->pool != NULL;
 }
 
 bool
 Address::isNull
-(void) const
+(void) const noexcept
 {
    return !this->hasPool() || this->identity == NULL;
 }
 
 bool
 Address::usesPool
-(const AddressPool *pool) const
+(const AddressPool *pool) const noexcept
 {
    return this->pool == pool;
 }
 
 bool
 Address::inRange
-(void) const
+(void) const noexcept
 {
    return this->hasPool() && !this->isNull() && this->pool->inRange(this->label());
 }
 
 bool
 Address::sharesIdentity
-(const Address &address) const
+(const Address &address) const noexcept
 {
    if (!this->hasPool() || !address.hasPool())
       return false;

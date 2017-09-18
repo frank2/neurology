@@ -1,7 +1,5 @@
 #pragma once
 
-#include <cassert>
-
 #include <neurology/allocators/local.hpp>
 
 #include "../test.hpp"

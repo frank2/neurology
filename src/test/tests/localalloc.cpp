@@ -33,16 +33,10 @@ LocalAllocatorTest::testAllocator
 
    writeData = VarData(uintptr);
 
-   /* local allocator shouldn't split-- it's simply a shell for the C++ heap
-      operators */
-   NASSERT(!allocator.splits());
-
    /* local allocator is literally local my guy, my lady, my gender-neutral
       coder du jour */
    NASSERT(allocator.isLocal());
-   
    NASSERT(!allocator.isPooled(&allocator));
-   NASSERT(!allocator.isAssociated(allocation));
    NASSERT(!allocator.isBound(allocation));
    NASSERT(!allocator.hasAddress(&allocator));
    NASSERT(!allocator.hasParent(allocation));
@@ -54,7 +48,6 @@ LocalAllocatorTest::testAllocator
    NASSERT(allocAddress == allocation.address());
 
    NASSERT(allocator.isPooled(allocAddress));
-   NASSERT(allocator.isAssociated(allocation));
    NASSERT(allocator.isBound(allocation));
    NASSERT(allocator.hasAddress(allocAddress));
    NASSERT(allocator.hasAddress(allocAddress+4));
@@ -67,7 +60,7 @@ LocalAllocatorTest::testAllocator
    cmpAddress = allocator.newAddress(allocation);
 
    NASSERT(allocAddress == cmpAddress);
-   NASSERT(!allocAddress.sharesIdentifier(cmpAddress));
+   NASSERT(!allocAddress.sharesIdentity(cmpAddress));
 
    NASSERT(allocator.bindCount(allocAddress) == 1);
 
@@ -98,7 +91,6 @@ LocalAllocatorTest::testAllocator
    allocator.deallocate(allocation);
 
    NASSERT(allocator.isPooled(allocAddress));
-   NASSERT(!allocator.isAssociated(allocation));
    NASSERT(!allocator.isBound(allocation));
    NASSERT(allocator.hasAddress(allocAddress));
    NASSERT(allocator.hasAddress(allocAddress+4));
@@ -110,7 +102,6 @@ LocalAllocatorTest::testAllocator
    allocator.deallocate(otherAlloc);
 
    NASSERT(!allocator.isPooled(allocAddress));
-   NASSERT(!allocator.isAssociated(allocation));
    NASSERT(!allocator.isBound(allocation));
    NASSERT(!allocator.hasAddress(allocAddress));
    NASSERT(!allocator.hasAddress(allocAddress+4));
@@ -202,7 +193,8 @@ LocalAllocatorTest::testAllocation
    NASSERT(sendData != testAllocation.read(testAllocation.address(), 4));
    NASSERT(sendData == testAllocation.read(testAllocation.address()+4, 4));
 
-   testAllocation.write(testAllocation.address(), sendData);
+   Address dumbRefIssue = testAllocation.address();
+   testAllocation.write(dumbRefIssue, sendData);
 
    NASSERT(sendData == testAllocation.read(4));
    NASSERT(sendData == testAllocation.read(4,4));

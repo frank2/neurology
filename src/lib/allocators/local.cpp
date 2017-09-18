@@ -39,7 +39,6 @@ LocalAllocator::LocalAllocator
 (void)
    : Allocator()
 {
-   this->split = false; // local allocator doesn't split because it's a heap
    this->local = true; // it's literally in the name my dude 
 }
 

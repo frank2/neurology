@@ -20,7 +20,7 @@ namespace Neurology
                                         ,Type>::type BaseType;
       typedef BaseType *PointedType;
       typedef typename std::remove_pointer<BaseType>::type UnpointedType;
-      typedef typename std::remove_all_extents<BaseType>::type NoExtentType
+      typedef typename std::remove_all_extents<BaseType>::type NoExtentType;
       typedef typename std::remove_extent<BaseType>::type ParentExtentType;
       
       class Exception : public Neurology::Exception
@@ -146,12 +146,12 @@ namespace Neurology
          this->cache = object.cache;
       }
 
-      operator=(const BaseType &type)
+      void operator=(const BaseType &type)
       {
          this->assign(type);
       }
 
-      operator=(const PointedType type)
+      void operator=(const PointedType type)
       {
          this->assign(type);
       }
@@ -176,8 +176,8 @@ namespace Neurology
          return this->pointer();
       }
 
-      /* hi welcome to hell, we'll start with the third layer, which is an
-         array of arrays */
+      /* hi welcome to hell, let me explain what on god's green earth is going on here. */
+      template <typename... T>
       typename std::enable_if<std::is_array<ParentExtentType>::value
                               ,Object<ParentExtentType> >::type
       operator[] (unsigned int index)
@@ -194,7 +194,7 @@ namespace Neurology
             cache = this->allocation.read(slicePoint, sizeof(ParentExtentType));
 
          return Object<ParentExtentType>(this->allocator
-                                         ,this->allocation.slice(this->allocation.address(size*index))
+                                         ,this->allocation.slice(this->allocation.address(size*index), size)
                                          ,cache
                                          ,this->built
                                          ,this->cached
@@ -202,6 +202,7 @@ namespace Neurology
       }
 
       /* the next layer is an array to the base object */
+      template <typename...>
       typename std::enable_if<std::rank<BaseType>::value == 1
                               ,Object<NoExtentType> >::type
       operator[] (unsigned int index)
@@ -218,21 +219,19 @@ namespace Neurology
             cache = this->allocation.read(slicePoint, sizeof(NoExtentType));
 
          return Object<NoExtentType>(this->allocator
-                                         ,this->allocation.slice(this->allocation.address(size*index))
-                                         ,cache
-                                         ,this->built
-                                         ,this->cached
-                                         ,this->autoflush);
+                                     ,this->allocation.slice(this->allocation.address(size*index), size)
+                                     ,cache
+                                     ,this->built
+                                     ,this->cached
+                                     ,this->autoflush);
       }
 
       /* the next layer is pointer arithmetic via array subscripting */
-      typename std::enable_if<!std::is_array<UnpointedType>::value &&
-                              (std::is_pointer<UnpointedType>::value ||
-                               (std::is_pointer<BaseType>::value &&
-                                !std::is_pointer<UnpointedType>::value &&
-                                !std::is_void<UnpointedType>::value))
+      template <typename...>
+      typename std::enable_if<std::is_pointer<BaseType>::value && !std::is_pointer<UnpointedType>::value &&
+                              !std::is_void<UnpointedType>::value
                               ,Object<UnpointedType> >::type
-      operator[] (unsinged int index)
+      operator[] (unsigned int index)
       {
          SIZE_T size = sizeof(UnpointedType);
          Address slicePoint;
@@ -246,24 +245,24 @@ namespace Neurology
             cache = this->allocation.read(slicePoint, sizeof(UnpointedType));
 
          return Object<UnpointedType>(this->allocator
-                                         ,this->allocation.slice(this->allocation.address(size*index))
-                                         ,cache
-                                         ,this->built
-                                         ,this->cached
-                                         ,this->autoflush);
+                                      ,this->allocation.slice(this->allocation.address(size*index), size)
+                                      ,cache
+                                      ,this->built
+                                      ,this->cached
+                                      ,this->autoflush);
       }
 
-      bool isBuilt(void) const
+      bool isBuilt(void) const noexcept
       {
          return this->built;
       }
 
-      bool isCached(void) const
+      bool isCached(void) const noexcept
       {
          return this->cached;
       }
 
-      bool willAutoflush(void) const
+      bool willAutoflush(void) const noexcept
       {
          return this->autoflush;
       }
@@ -326,7 +325,7 @@ namespace Neurology
             this->flush();
       }
 
-      reassign(const BaseType &value)
+      void reassign(const BaseType &value)
       {
          this->reassign(&value, sizeof(Type));
       }
@@ -363,32 +362,6 @@ namespace Neurology
          if (this->cached && this->autoflush)
             this->flush();
       }
-
-      virtual typename std::enable_if<!std::is_pointer<BaseType>::value
-                                      ,PointedType>::type
-      pointer(void)
-      {
-         if (!this->cached)
-         {
-            /* most of the time, we won't be cached */
-            this->allocation.throwIfInvalid();
-            return reinterpret_cast<PointedType>(this->allocation.address().pointer());
-         }
-
-         if (this->cache.size() == 0 && this->allocation.size() == 0)
-            throw NullCacheException(*this);
-         
-         if (this->cache.size() != this->allocation.size())
-            this->cache.resize(this->allocation.size());
-         
-         return reinterpret_cast<PointedType>(this->cache.data());
-      }
-
-      virtual typename std::enable_if<std::is_pointer<BaseType>::value
-                                      ,Object<BaseType> >::type
-      pointer(void)
-      {
-         
 
       virtual const PointedType pointer(void) const
       {

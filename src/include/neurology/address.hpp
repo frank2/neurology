@@ -234,12 +234,12 @@ namespace Neurology
       void drain(AddressPool &targetPool);
       std::set<Address *> pool(void) const;
 
-      bool hasLabel(const LPVOID pointer) const;
-      bool hasLabel(Label label) const;
-      bool isBound(const Address &address) const;
-      bool inRange(Label label) const;
-      bool hasIdentity(const Identity identity) const;
-      bool sharesIdentity(const Address &left, const Address &right) const;
+      bool hasLabel(const LPVOID pointer) const noexcept;
+      bool hasLabel(Label label) const noexcept;
+      bool isBound(const Address &address) const noexcept;
+      bool inRange(Label label) const noexcept;
+      bool hasIdentity(const Identity identity) const noexcept;
+      bool sharesIdentity(const Address &left, const Address &right) const noexcept;
 
       void throwIfNoLabel(const LPVOID pointer) const;
       void throwIfNoLabel(Label label) const;
@@ -377,11 +377,11 @@ namespace Neurology
       LPVOID pointer(void);
       const LPVOID pointer(void) const;
 
-      bool hasPool(void) const;
-      bool isNull(void) const;
-      bool usesPool(const AddressPool *pool) const;
-      bool inRange(void) const;
-      bool sharesIdentity(const Address &address) const;
+      bool hasPool(void) const noexcept;
+      bool isNull(void) const noexcept;
+      bool usesPool(const AddressPool *pool) const noexcept;
+      bool inRange(void) const noexcept;
+      bool sharesIdentity(const Address &address) const noexcept;
 
       void throwIfNull(void) const;
       void throwIfNoPool(void) const;

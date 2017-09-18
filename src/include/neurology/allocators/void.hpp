@@ -144,58 +144,44 @@ namespace Neurology
       };
 
       typedef std::set<Allocation *> AllocationSet;
-      typedef std::map<Address, SIZE_T> MemoryPool;
-      typedef std::map<Address, AllocationSet> BindingMap;
-      typedef std::map<Allocation *, AddressPool *> AddressPoolMap;
-      typedef std::map<Allocation *, Address> AssociationMap;
-      typedef std::map<Allocation *, AllocationSet> ChildMap;
-      typedef std::map<Allocation *, Allocation *> ParentMap;
+      typedef std::map<const Allocation *, Address> AssociationMap;
+      typedef std::map<const Address, SIZE_T> MemoryPool;
+      typedef std::map<const Address, AllocationSet> BindingMap;
 
    protected:
-      bool split;
       bool local;
       
       AddressPool pooledAddresses;
-      MemoryPool pooledMemory;
-      BindingMap bindings, suballocations;
-      AddressPoolMap addressPools;
+      AllocationSet allocations;
       AssociationMap associations;
-      ChildMap children;
-      ParentMap parents;
+      MemoryPool pooledMemory;
+      BindingMap bindings;
 
    public:
       Allocator(void);
-      Allocator(bool split);
       ~Allocator(void);
 
-      void allowSplitting(void);
-      void denySplitting(void);
-      bool splits(void) const;
-
-      bool isLocal(void) const;
-      bool isPooled(const Address &address) const;
-      bool isAssociated(const Allocation &allocation) const;
-      bool isBound(const Allocation &allocation) const;
-      bool hasAddress(const Address &address) const;
-      bool willSplit(const Address &address, SIZE_T size) const;
-      bool sharesPool(const Allocation &left, const Allocation &right) const;
-      bool hasParent(const Allocation &allocation) const;
-      bool hasChildren(const Allocation &allocation) const;
-      bool isChild(const Allocation &parent, const Allocation &child) const;
+      bool isLocal(void) const noexcept;
+      bool isPooled(const Address &address) const noexcept;
+      bool isBound(const Allocation &allocation) const noexcept;
+      bool hasAddress(const Address &address) const noexcept;
+      bool sharesPool(const Allocation &left, const Allocation &right) const noexcept;
+      bool hasParent(const Allocation &allocation) const noexcept;
+      bool hasChildren(const Allocation &allocation) const noexcept;
+      bool isChild(const Allocation &parent, const Allocation &child) const noexcept;
 
       void throwIfNotPooled(const Address &address) const;
-      void throwIfNotAssociated(const Allocation &allocation) const;
       void throwIfBound(const Allocation &allocation) const;
       void throwIfNoAddress(const Address &address) const;
       void throwIfNotBound(const Allocation &allocation) const;
       void throwIfNoAllocation(const Address &address) const;
       void throwIfNoParent(const Allocation &allocation) const;
 
-      const Address addressOf(const Allocation &allocation) const;
-      Address address(const Allocation &allocation);
-      Address address(const Allocation &allocation, SIZE_T offset);
-      Address newAddress(const Allocation &allocation);
-      Address newAddress(const Allocation &allocation, SIZE_T offset);
+      const Address addressOf(const Allocation &allocation) const noexcept;
+      Address address(Allocation &allocation);
+      Address address(Allocation &allocation, SIZE_T offset);
+      Address newAddress(Allocation &allocation);
+      Address newAddress(Allocation &allocation, SIZE_T offset);
       SIZE_T bindCount(const Address &address) const;
       SIZE_T querySize(const Allocation &allocation) const;
 
@@ -206,8 +192,8 @@ namespace Neurology
       Allocation &find(const Address &address) const;
       virtual Allocation &find(const Address &address, SIZE_T size) const;
 
-      virtual Allocation null(void);
-      virtual Allocation null(void) const;
+      Allocation null(void);
+      Allocation null(void) const;
       
       Allocation allocate(SIZE_T size);
       
@@ -224,7 +210,7 @@ namespace Neurology
          return this->allocate(size);
       }
          
-      void reallocate(const Allocation &allocation, SIZE_T size);
+      void reallocate(Allocation &allocation, SIZE_T size);
 
       template <class Type> void reallocate(const Allocation &allocation)
       {
@@ -244,10 +230,11 @@ namespace Neurology
       Data read(const Address &address, SIZE_T size) const;
       void write(const Address &address, const Data data);
 
-      Allocation &root(const Allocation &allocation) const;
-      Allocation &parent(const Allocation &allocation);
+      Allocation &root(Allocation &allocation) const;
+      const Allocation &root(const Allocation &allocation) const;
+      Allocation &parent(Allocation &allocation);
       const Allocation &parent(const Allocation &allocation) const;
-      std::set<const Allocation *> getChildren(const Allocation &allocation) const;
+      AllocationSet children(const Allocation &allocation) const;
       
    protected:
       virtual Address poolAddress(SIZE_T size);
@@ -262,12 +249,6 @@ namespace Neurology
       void rebind(Allocation *allocation, const Address &newAddress);
       void unbind(Allocation *allocation);
 
-      void addChild(Allocation *parent, Allocation *child);
-      void disownChild(Allocation *child);
-
-      Data splitRead(const Address &startAddress, SIZE_T size) const;
-      void splitWrite(const Address &destination, const Data data);
-
       /* functions for writing to/reading from directly to/from an allocation */
       Data read(const Allocation *allocation, const Address &address, SIZE_T size) const;
       void write(const Allocation *allocation, const Address &destination, const Data data);
@@ -276,7 +257,7 @@ namespace Neurology
       virtual Data readAddress(const Address &address, SIZE_T size) const;
       virtual void writeAddress(const Address &destination, const Data data);
 
-      Allocation spawn(const Allocation *allocation, const Address &address, SIZE_T size);
+      Allocation spawn(Allocation *allocation, const Address &address, SIZE_T size);
    };
    
    class Allocation
@@ -341,37 +322,39 @@ namespace Neurology
          OffsetOutOfRangeException(const Allocation &allocation, const SIZE_T offset, const SIZE_T size);
       };
 
+      class OrphanAllocationException : public Exception
+      {
+      public:
+         OrphanAllocationException(const Allocation &allocation);
+      };
+
    protected:
       Allocator *allocator;
-
-   private:
-      Allocation(Allocator *allocator, Address &address, SIZE_T size);
+      Allocation *parent;
+      Allocator::AllocationSet children;
+      AddressPool pool;
       
    public:
       Allocation(void);
       Allocation(Allocator *allocator);
       Allocation(Allocation &allocation);
-      Allocation(const Allocation *allocation);
       ~Allocation(void);
 
       void operator=(Allocation &allocation);
       void operator=(const Allocation *allocation);
-      Address operator*(void);
-      const Address operator*(void) const;
 
-      bool isNull(void) const;
-      bool isBound(void) const;
-      bool isLocal(void) const;
-      bool allocatedFrom(const Allocator *allocator) const;
-      bool inRange(SIZE_T offset) const;
-      bool inRange(SIZE_T offset, SIZE_T size) const;
-      bool inRange(const Address &address) const;
-      bool inRange(const Address &address, SIZE_T size) const;
-      bool sharesPool(const Allocation &allocation) const;
-      bool hasParent(void) const;
-      bool hasChildren(void) const;
-      bool isChild(const Allocation &parent) const;
-      bool isParent(const Allocation &child) const;
+      bool isNull(void) const noexcept;
+      bool isBound(void) const noexcept;
+      bool isLocal(void) const noexcept;
+      bool allocatedFrom(const Allocator *allocator) const noexcept;
+      bool inRange(SIZE_T offset) const noexcept;
+      bool inRange(SIZE_T offset, SIZE_T size) const noexcept;
+      bool inRange(const Address &address) const noexcept;
+      bool inRange(const Address &address, SIZE_T size) const noexcept;
+      bool hasParent(void) const noexcept;
+      bool hasChildren(void) const noexcept;
+      bool isChild(const Allocation &parent) const noexcept;
+      bool isParent(const Allocation &child) const noexcept;
 
       void throwIfNoAllocator(void) const;
       void throwIfNotBound(void) const;
@@ -379,23 +362,24 @@ namespace Neurology
       void throwIfNotInRange(SIZE_T offset, SIZE_T size) const;
       void throwIfNotInRange(const Address &address) const;
       void throwIfNotInRange(const Address &address, SIZE_T size) const;
+      void throwIfNoParent(void) const;
 
       Address address(void);
-      const Address address(void) const;
+      Address address(void) const;
       Address address(SIZE_T offset);
-      const Address address(SIZE_T offset) const;
+      Address address(SIZE_T offset) const;
       Address newAddress(void);
-      const Address newAddress(void) const;
+      Address newAddress(void) const;
       Address newAddress(SIZE_T offset);
-      const Address newAddress(SIZE_T offset) const;
+      Address newAddress(SIZE_T offset) const;
       Address start(void);
-      const Address start(void) const;
+      Address start(void) const;
       Address end(void);
-      const Address end(void) const;
+      Address end(void) const;
       const Address baseAddress(void) const;
       SIZE_T offset(const Address &address) const;
 
-      SIZE_T size(void) const;
+      SIZE_T size(void) const noexcept;
 
       void allocate(SIZE_T size);
       void reallocate(SIZE_T size);
@@ -414,9 +398,15 @@ namespace Neurology
 
       Allocation slice(const Address &address, SIZE_T size);
 
-      Allocation &root(void) const;
-      Allocation &parent(void);
-      const Allocation &parent(void) const;
-      std::set<const Allocation *> children(void) const;
+      Allocation &root(void) noexcept;
+      const Allocation &root(void) const noexcept;
+      Allocation &getParent(void);
+      const Allocation &getParent(void) const;
+      Allocator::AllocationSet getChildren(void) const;
+
+   protected:
+      void setParent(Allocation &allocation);
+      void disownChild(Allocation &allocation);
+      void leaveParent(void);
    };
 }

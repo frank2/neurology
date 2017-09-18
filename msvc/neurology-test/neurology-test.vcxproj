@@ -157,11 +157,15 @@
     <ClInclude Include="..\..\src\test\main.hpp" />
     <ClInclude Include="..\..\src\test\test.hpp" />
     <ClInclude Include="..\..\src\test\tests\address.hpp" />
+    <ClInclude Include="..\..\src\test\tests\localalloc.hpp" />
+    <ClInclude Include="..\..\src\test\tests\object.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\test\main.cpp" />
     <ClCompile Include="..\..\src\test\test.cpp" />
     <ClCompile Include="..\..\src\test\tests\address.cpp" />
+    <ClCompile Include="..\..\src\test\tests\localalloc.cpp" />
+    <ClCompile Include="..\..\src\test\tests\object.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
