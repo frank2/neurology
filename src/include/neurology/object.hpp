@@ -22,6 +22,16 @@ namespace Neurology
       typedef typename std::remove_pointer<BaseType>::type UnpointedType;
       typedef typename std::remove_all_extents<BaseType>::type NoExtentType;
       typedef typename std::remove_extent<BaseType>::type ParentExtentType;
+      typedef typename std::conditional<
+         std::is_array<ParentExtentType>::value,
+         ParentExtentType,
+         typename std::conditional<
+            std::rank<BaseType>::value == 1,
+            NoExtentType,
+            typename std::conditional<
+               std::is_pointer<BaseType>::value && !std::is_void<UnpointedType>::value,
+               UnpointedType,
+               BaseType>::type>::type>::type IndexType;
       
       class Exception : public Neurology::Exception
       {
@@ -61,6 +71,42 @@ namespace Neurology
          {
          }
       };
+
+      class NullCacheException : public Exception
+      {
+      public:
+         NullCacheException(const Object &object)
+            : Exception(object, EXCSTR(L"No cache is available."))
+         {
+         }
+      };
+
+      class DesyncedCacheException : public Exception
+      {
+      public:
+         DesyncedCacheException(const Object &object)
+            : Exception(object, EXCSTR(L"The cache is not synced with the allocation."))
+         {
+         }
+      };
+
+      class ObjectNotCachedException : public Exception
+      {
+      public:
+         ObjectNotCachedException(const Object &object)
+            : Exception(object, EXCSTR(L"The object is not cacheing."))
+         {
+         }
+      };
+
+      class NonLocalPointerException : public Exception
+      {
+      public:
+         NonLocalPointerException(const Object &object)
+            : Exception(object, EXCSTR(L"A local pointer was requested on an object allocated on an uncached remote allocation."))
+         {
+         }
+      };
       
    protected:
       Allocator *allocator;
@@ -69,16 +115,6 @@ namespace Neurology
       bool built;
       bool cached;
       bool autoflush;
-
-      Object(Allocator *allocator, Allocation allocation, Data cache, bool built, bool cached, bool autoflush)
-         : allocator(allocator)
-         , allocation(allocation)
-         , cache(cache)
-         , built(built)
-         , cached(cached)
-         , autoflush(autoflush)
-      {
-      }
 
    public:
       Object(void)
@@ -116,13 +152,23 @@ namespace Neurology
          this->assign(pointer, size);
       }
       
-      Object(const Object &object)
+      Object(Object &object)
          : built(object.built)
          , cached(object.cached)
          , autoflush(object.autoflush)
          , allocator(object.allocator)
       {
          *this = object;
+      }
+
+      Object(Allocator *allocator, Allocation allocation, Data cache, bool built, bool cached, bool autoflush)
+         : allocator(allocator)
+         , allocation(allocation)
+         , cache(cache)
+         , built(built)
+         , cached(cached)
+         , autoflush(autoflush)
+      {
       }
 
       ~Object(void)
@@ -133,11 +179,19 @@ namespace Neurology
          if (this->built)
             this->destruct();
          
-         if (this->allocation.isValid())
+         if (this->allocation.isBound())
             this->allocation.deallocate();
       }
+
+      template <typename... Args>
+      static Object New(Args... args)
+      {
+         Object obj;
+         obj.construct(args...);
+         return obj;
+      }
       
-      void operator=(const Object &object)
+      void operator=(Object &object)
       {
          this->allocator = object.allocator;
          this->allocation.copy(object.allocation);
@@ -176,82 +230,6 @@ namespace Neurology
          return this->pointer();
       }
 
-      /* hi welcome to hell, let me explain what on god's green earth is going on here. */
-      template <typename... T>
-      typename std::enable_if<std::is_array<ParentExtentType>::value
-                              ,Object<ParentExtentType> >::type
-      operator[] (unsigned int index)
-      {
-         SIZE_T size = sizeof(ParentExtentType);
-         Address slicePoint;
-         Data cache;
-
-         this->allocation.throwIfInvalid();
-
-         slicePoint = this->allocation.address(size*index);
-
-         if (this->cached)
-            cache = this->allocation.read(slicePoint, sizeof(ParentExtentType));
-
-         return Object<ParentExtentType>(this->allocator
-                                         ,this->allocation.slice(this->allocation.address(size*index), size)
-                                         ,cache
-                                         ,this->built
-                                         ,this->cached
-                                         ,this->autoflush);
-      }
-
-      /* the next layer is an array to the base object */
-      template <typename...>
-      typename std::enable_if<std::rank<BaseType>::value == 1
-                              ,Object<NoExtentType> >::type
-      operator[] (unsigned int index)
-      {
-         SIZE_T size = sizeof(NoExtentType);
-         Address slicePoint;
-         Data cache;
-
-         this->allocation.throwIfInvalid();
-
-         slicePoint = this->allocation.address(size*index);
-
-         if (this->cached)
-            cache = this->allocation.read(slicePoint, sizeof(NoExtentType));
-
-         return Object<NoExtentType>(this->allocator
-                                     ,this->allocation.slice(this->allocation.address(size*index), size)
-                                     ,cache
-                                     ,this->built
-                                     ,this->cached
-                                     ,this->autoflush);
-      }
-
-      /* the next layer is pointer arithmetic via array subscripting */
-      template <typename...>
-      typename std::enable_if<std::is_pointer<BaseType>::value && !std::is_pointer<UnpointedType>::value &&
-                              !std::is_void<UnpointedType>::value
-                              ,Object<UnpointedType> >::type
-      operator[] (unsigned int index)
-      {
-         SIZE_T size = sizeof(UnpointedType);
-         Address slicePoint;
-         Data cache;
-
-         this->allocation.throwIfInvalid();
-
-         slicePoint = this->allocation.address(size*index);
-
-         if (this->cached)
-            cache = this->allocation.read(slicePoint, sizeof(UnpointedType));
-
-         return Object<UnpointedType>(this->allocator
-                                      ,this->allocation.slice(this->allocation.address(size*index), size)
-                                      ,cache
-                                      ,this->built
-                                      ,this->cached
-                                      ,this->autoflush);
-      }
-
       bool isBuilt(void) const noexcept
       {
          return this->built;
@@ -269,7 +247,7 @@ namespace Neurology
 
       void setAllocator(Allocator *allocator)
       {
-         if (this->allocation.isValid())
+         if (this->allocation.isBound())
             throw HotSwapException(*this);
          
          this->allocator = allocator;
@@ -287,32 +265,32 @@ namespace Neurology
 
       void assign(const BaseType &value)
       {
-         this->assign(&value, sizeof(BaseType));
+         /* I hate const correctness so much... */
+         this->assign(reinterpret_cast<LPVOID>(
+                         const_cast<BaseType *>(&value)), sizeof(BaseType));
       }
 
       void assign(const PointedType pointer)
       {
-         this->assign(pointer, sizeof(Type));
+         this->assign(reinterpret_cast<const LPVOID>(pointer), sizeof(Type));
       }
 
       void assign(const PointedType pointer, SIZE_T size)
       {
-         this->assign(reinterpret_castt<const LPVOID>(pointer), size);
+         this->assign(reinterpret_cast<const LPVOID>(pointer), size);
       }
 
       virtual void assign(const LPVOID pointer, SIZE_T size)
       {
          Data data;
          
-         if (!this->allocation.isValid())
+         if (!this->allocation.isBound())
             this->allocate(size);
 
          data = BlockData(const_cast<LPVOID>(pointer), size);
          
          if (!this->built && std::is_copy_constructible<BaseType>::value)
             this->construct(*reinterpret_cast<PointedType>(data.data()));
-         else if (this->built && std::is_copy_assignable<BaseType>::value)
-            **this = *reinterpret_cast<PointedType>(data.data());
          else if (this->cached)
             this->cache = data;
          else
@@ -346,15 +324,13 @@ namespace Neurology
       {
          Data data;
          
-         if (!this->allocation.isValid())
+         if (!this->allocation.isBound())
             return this->assign(pointer, size);
          
          this->reallocate(size);
          data = BlockData(const_cast<LPVOID>(pointer), size);
          
-         if (std::is_copy_assignable<BaseType>::value)
-            **this = *reinterpret_cast<PointedType>(data.data());
-         else if (this->cached)
+         if (this->cached)
             this->cache = data;
          else
             this->allocation.write(data);
@@ -363,14 +339,16 @@ namespace Neurology
             this->flush();
       }
 
-      virtual const PointedType pointer(void) const
+      virtual PointedType pointer(void)
       {
          if (!this->cached)
          {
-            this->allocation.throwIfInvalid();
+            this->allocation.throwIfNotBound();
+
+            if (!this->allocation.isLocal())
+               throw NonLocalPointerException(*this);
          
-            return const_cast<const PointedType>(
-               reinterpret_cast<PointedType>(this->allocation.address().pointer()));
+            return reinterpret_cast<PointedType>(this->allocation.address().pointer());
          }
          
          if (this->cache.size() == 0 && this->allocation.size() == 0)
@@ -380,6 +358,30 @@ namespace Neurology
             this->cache.resize(this->allocation.size());
             
          return reinterpret_cast<PointedType>(this->cache.data());
+      }
+
+      virtual const PointedType pointer(void) const
+      {
+         if (!this->cached)
+         {
+            this->allocation.throwIfNotBound();
+         
+            if (!this->allocation.isLocal())
+               throw NonLocalPointerException(*this);
+
+            return const_cast<const PointedType>(
+               reinterpret_cast<PointedType>(this->allocation.address().pointer()));
+         }
+         
+         if (this->cache.size() == 0 && this->allocation.size() == 0)
+            throw NullCacheException(*this);
+
+         if (this->cache.size() != this->allocation.size())
+            throw DesyncedCacheException(*this);
+            
+         return const_cast<const PointedType>(
+            reinterpret_cast<PointedType>(
+               const_cast<LPBYTE>(this->cache.data())));
       }
 
       virtual BaseType &reference(void)
@@ -414,15 +416,15 @@ namespace Neurology
       template <class ... Args>
       void construct(Args... args)
       {
-         /* nothing to be done for array/pointer types */
-         if (std::is_pointer<BaseType>::value || std::is_array<BaseType>::value)
+         /* nothing to be done for array types */
+         if (std::is_array<BaseType>::value)
             return;
          
          if (this->built)
             throw AlreadyConstructedException(*this);
 
          /* perhaps you are constructing this prior to allocating it */
-         if (!this->allocation.isValid())
+         if (!this->allocation.isBound())
             this->allocate();
          
          new(this->pointer()) BaseType(args...);
@@ -437,7 +439,7 @@ namespace Neurology
          this->pointer()->~BaseType();
          this->built = false;
 
-         if (this->allocation.isValid())
+         if (this->allocation.isBound())
             this->allocation.deallocate();
 
          this->cache.empty();
@@ -451,13 +453,11 @@ namespace Neurology
       void allocate(SIZE_T size)
       {
          this->allocation = this->allocator->allocate(size);
-         this->offset.setAddress(this->allocation.address());
-         this->offset.setOffset(0);
       }
 
       void reallocate(SIZE_T size)
       {
-         if (!this->allocation.isValid())
+         if (!this->allocation.isBound())
             return this->allocate(size);
 
          this->allocation.reallocate(size);
