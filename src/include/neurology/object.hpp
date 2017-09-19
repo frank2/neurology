@@ -20,18 +20,6 @@ namespace Neurology
                                         ,Type>::type BaseType;
       typedef BaseType *PointedType;
       typedef typename std::remove_pointer<BaseType>::type UnpointedType;
-      typedef typename std::remove_all_extents<BaseType>::type NoExtentType;
-      typedef typename std::remove_extent<BaseType>::type ParentExtentType;
-      typedef typename std::conditional<
-         std::is_array<ParentExtentType>::value,
-         ParentExtentType,
-         typename std::conditional<
-            std::rank<BaseType>::value == 1,
-            NoExtentType,
-            typename std::conditional<
-               std::is_pointer<BaseType>::value && !std::is_void<UnpointedType>::value,
-               UnpointedType,
-               BaseType>::type>::type>::type IndexType;
       
       class Exception : public Neurology::Exception
       {
@@ -411,6 +399,11 @@ namespace Neurology
             throw ObjectNotCachedException(*this);
 
          this->cache = this->allocation.read();
+      }
+
+      SIZE_T references(void)
+      {
+         return this->allocator->bindCount(this->allocation.baseAddress());
       }
 
       template <class ... Args>

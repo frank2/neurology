@@ -28,7 +28,13 @@ Handle::Handle
 }
 
 Handle::Handle
-(const Handle &handle)
+(Handle &handle)
+{
+   *this = handle;
+}
+
+Handle::Handle
+(const Handle *handle)
 {
    *this = handle;
 }
@@ -36,15 +42,38 @@ Handle::Handle
 Handle::~Handle
 (void)
 {
-   if (*this->handle != NULL_HANDLE)
+   if (this->handle.references() == 1)
       this->close();
 }
 
-void
+Handle &
 Handle::operator=
-(const Handle &handle)
+(Handle &handle)
 {
    this->handle = handle.handle;
+   return *this;
+}
+
+Handle &
+Handle::operator=
+(const Handle *handle)
+{
+   this->handle = handle->getHandle();
+   return *this;
+}
+
+HANDLE &
+Handle::operator*
+(void)
+{
+   return *this->handle;
+}
+
+const HANDLE &
+Handle::operator*
+(void) const
+{
+   return *this->handle;
 }
 
 bool
@@ -54,12 +83,26 @@ Handle::isNull
    return *this->handle == NULL_HANDLE;
 }
 
+bool
+Handle::isValid
+(void) const
+{
+   return !this->isNull() && *this->handle != INVALID_HANDLE_VALUE;
+}
+
 void
 Handle::throwIfNull
 (void) const
 {
    if (this->isNull())
       throw NullHandleException(*const_cast<Handle *>(this));
+}
+
+HANDLE
+Handle::getHandle
+(void) 
+{
+   return *this->handle;
 }
 
 HANDLE
@@ -74,6 +117,60 @@ Handle::setHandle
 (HANDLE handle)
 {
    this->handle = handle;
+}
+
+Handle
+Handle::duplicate
+(void) 
+{
+   return this->(GetCurrentProcess()
+                 ,GetCurrentProcess()
+                 ,NULL
+                 ,FALSE
+                 ,DUPLICATE_SAME_ACCESS);
+}
+
+Handle
+Handle::duplicate
+(DWORD access, BOOL inheritHandle, DWORD options)
+{
+   return this->(GetCurrentProcess()
+                 ,GetCurrentProcess()
+                 ,access
+                 ,inheritHandle
+                 ,options);
+}
+
+Handle
+Handle::duplicate
+(Handle sourceProcess, Handle destProcess)
+{
+   return this->(sourceProcess
+                 ,destProcess
+                 ,NULL
+                 ,FALSE
+                 ,DUPLICATE_SAME_ACCESS);
+}
+
+Handle
+Handle::duplicate
+(Handle sourceProcess, Handle destProcess, DWORD access, BOOL inheritHandle, DWORD options)
+{
+   Handle result;
+   HANDLE targetHandle;
+   
+   if (!DuplicateHandle(*sourceProcess
+                        ,*this->handle
+                        ,*destProcess
+                        ,&targetHandle
+                        ,access
+                        ,inheritHandle
+                        ,options))
+      throw Win32Exception(EXCSTR(L"DuplicateHandle failed."));
+
+   result = targetHandle;
+
+   return result;
 }
 
 void
