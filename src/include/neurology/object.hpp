@@ -95,6 +95,18 @@ namespace Neurology
          {
          }
       };
+
+      class SizeTooSmallException : public Exception
+      {
+      public:
+         SIZE_T size;
+         
+         SizeTooSmallException(const Object &object, SIZE_T size)
+            : Exception(object, EXCSTR(L"The requested size is too small to contain the base type."))
+            , size(size)
+         {
+         }
+      };
       
    protected:
       Allocator *allocator;
@@ -445,7 +457,7 @@ namespace Neurology
 
       void allocate(SIZE_T size)
       {
-         this->allocation = this->allocator->allocate(size);
+         this->allocation = this->allocator->allocate<BaseType>(size);
       }
 
       void reallocate(SIZE_T size)
@@ -453,7 +465,12 @@ namespace Neurology
          if (!this->allocation.isBound())
             return this->allocate(size);
 
-         this->allocation.reallocate(size);
+         this->allocator->reallocate<BaseType>(this->allocation, size);
+      }
+
+      SIZE_T size(void) const
+      {
+         return this->allocation.size();
       }
    };
 }

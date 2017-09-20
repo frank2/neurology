@@ -23,13 +23,13 @@ Process::Process
 }
 
 Process::Process
-(Rights access, PID pid)
+(AccessMask access, PID pid)
 {
    this->open(access, pid);
 }
 
 Process::Process
-(Rights access, BOOL inheritHandle, PID pid)
+(AccessMask access, BOOL inheritHandle, PID pid)
 {
    this->open(access, inheritHandle, pid);
 }
@@ -50,7 +50,7 @@ Handle
 Process::CurrentProcessHandle
 (void)
 {
-   return Handle(GetCurrentProcess());
+   return Handle(GetCurrentProcess()).duplicate();
 }
 
 Process
@@ -111,14 +111,14 @@ Process::open
 
 void
 Process::open
-(Rights access, PID pid)
+(AccessMask access, PID pid)
 {
    this->open(access, FALSE, pid);
 }
 
 void
 Process::open
-(Rights access, BOOL inheritHandle, PID pid)
+(AccessMask access, BOOL inheritHandle, PID pid)
 {
    HANDLE result = OpenProcess(access, inheritHandle, pid);
 

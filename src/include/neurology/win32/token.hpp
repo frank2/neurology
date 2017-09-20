@@ -41,5 +41,10 @@ namespace Neurology
       Token(Handle handle);
       Token(Token &token);
       Token(const Token *token);
+
+      static Token CurrentProcessToken(void);
+      static Token CurrentThreadToken(void);
+      static Token ProcessToken(Handle processHandle, Token::AccessMask access);
+      static Token ThreadToken(Handle threadHandle, Token::AccessMask access, BOOL openAsSelf);
    };
 }

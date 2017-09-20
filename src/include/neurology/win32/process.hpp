@@ -56,8 +56,8 @@ namespace Neurology
    public:
       Process(void);
       Process(Handle handle);
-      Process(Rights access, PID pid);
-      Process(Rights access, BOOL inheritHandle, PID pid);
+      Process(AccessMask access, PID pid);
+      Process(AccessMask access, BOOL inheritHandle, PID pid);
       Process(Process &process);
       Process(const Process *process);
 
@@ -74,8 +74,8 @@ namespace Neurology
       PID pid(void) const;
 
       void open(PID pid);
-      void open(Rights access, PID pid);
-      void open(Rights access, BOOL inheritHandle, PID pid);
+      void open(AccessMask access, PID pid);
+      void open(AccessMask access, BOOL inheritHandle, PID pid);
       void close(void);
    };
 }
