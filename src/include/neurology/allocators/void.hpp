@@ -217,12 +217,12 @@ namespace Neurology
          this->reallocate(allocation, sizeof(Type));
       }
 
-      template <class Type> Allocation reallocate(const Allocation &allocation, SIZE_T size)
+      template <class Type> void reallocate(const Allocation &allocation, SIZE_T size)
       {
          if (sizeof(Type) > size)
             throw InsufficientSizeException(*this, size);
 
-         return this->reallocate(allocation, size);
+         this->reallocate(allocation, size);
       }
       
       void deallocate(Allocation &allocation);
@@ -382,7 +382,35 @@ namespace Neurology
       SIZE_T size(void) const noexcept;
 
       void allocate(SIZE_T size);
+
+      template <class Type> void allocate(void)
+      {
+         this->allocate(sizeof(Type));
+      }
+
+      template <class Type> void allocate(SIZE_T size)
+      {
+         if (size < sizeof(Type))
+            throw InsufficientSizeException(*this, size);
+
+         this->allocate(size);
+      }
+      
       void reallocate(SIZE_T size);
+
+      template <class Type> void reallocate(void)
+      {
+         this->reallocate(sizeof(Type));
+      }
+
+      template <class Type> void reallocate(SIZE_T size)
+      {
+         if (size < sizeof(Type))
+            throw InsufficientSizeException(*this, size);
+
+         this->reallocate(size);
+      }
+
       void deallocate(void);
       
       Data read(void) const;

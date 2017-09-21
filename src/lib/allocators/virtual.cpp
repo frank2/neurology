@@ -41,6 +41,8 @@ VirtualAllocator::setProcessHandle
    /* if the handle is not null, we assume the process we're being given is valid and contains the proper
       rights-- it should be the job of the caller to verify whether or not the handle has the rights it needs
       else it throw a Win32 error */
+   if (handle.isNull())
+      return;
 
    /* remove all pages in the allocator-- if we're declaring this another process's virtual allocator, then
       all underlying allocations become invalid. */
@@ -67,14 +69,6 @@ VirtualAllocator::setDefaultProtection
    this->defaultProtection = state;
 }
 
-Allocation
-VirtualAllocator::allocate
-(SIZE_T size)
-{
-   Page &page = this->allocate(size, this->defaultAllocation, this->defaultProtection);
-   return page.slice(page.address(), size);
-}
-
 Page &
 VirtualAllocator::allocate
 (SIZE_T size, Page::State allocationType, Page::State protection)
@@ -86,10 +80,10 @@ Page &
 VirtualAllocator::allocate
 (Address address, SIZE_T size, Page::State allocationType, Page::State protection)
 {
-   Object<Page> &pageObj = this->pages[address];
+   Page &pageObj = this->pages[address];
 
    pageObj->allocator = this;
-   this->allocate(pageObj.pointer(), address, size, allocationType, protection);
+   this->allocate(&pageObj, address, size, allocationType, protection);
 
    if (pageObj->baseAddress() != address)
    {
@@ -209,7 +203,7 @@ VirtualAllocator::enumerate
    {
       if (size != memoryInfo.size())
       {
-         memoryInfo.reallocate(size);
+         memoryInfo.reallocate<MEMORY_BASIC_INFORMATION>(size);
          continue;
       }
 
@@ -232,4 +226,55 @@ VirtualAllocator::enumerate
 
    if (!foundEntries)
       throw Win32Exception(EXCSTR(L"VirtualQuery failed"));
+}
+
+Address
+VirtualAllocator::poolAddress
+(SIZE_T size)
+{
+   return this->poolAddress(NULL, size, this->defaultAllocation, this->defaultProtection);
+}
+
+Address
+VirtualAllocator::poolAddress
+(Address address, SIZE_T size, Page::State allocationType, Page::State protection)
+{
+   Address resultAddress;
+
+   if (this->isLocal())
+      resultAddress = VirtualAlloc(address.pointer(), size, allocationType.mask, protection.mask);
+   else
+      resultAddress = VirtualAllocEx(*this->processHandle, address.pointer(), size, allocationType.mask, protection.mask);
+
+   if (resultAddress == NULL)
+      throw Win32Error(EXCSTR(L"VirtualAlloc failed."));
+
+   resultAddress = this->pooledAddresses.address(resultAddress.label());
+
+   /* constructor should bind itself */
+   this->pages[resultAddress] = Page(this, resultAddress);
+
+   return resultAddress;
+}
+
+Address
+VirtualAllocator::repoolAddress
+(Address &address, SIZE_T newSize)
+{
+   Address newAddress;
+   Data data;
+
+   this->throwIfNotPooled(address);
+
+   Page &page = this->pages[address];
+   data = page.read();
+
+   /* call freePage instead of deallocate/unbind/etc so that the unbinding process doesn't actually happen.
+      what will happen instead is that the original page allocation will be overwritten with the new
+      allocation information. */
+   this->freePage(page);
+   newAddress = this->poolAddress(address, newSize, page.memoryInfo->Type, page.memoryInfo->AllocationProtect);
+   this->write(newAddress, data);
+
+   return newAddress;
 }

@@ -24,10 +24,10 @@ namespace Neurology
          Exception(VirtualAllocator *allocator, const LPWSTR message);
       };
 
-      typedef std::map<const Address, Page *> PageMap;
+      typedef std::map<const Address, Page> PageObjectMap;
 
    protected:
-      PageMap pages;
+      PageObjectMap pages;
       Handle processHandle;
       Page::State defaultAllocation;
       Page::State defaultProtection;
@@ -62,8 +62,13 @@ namespace Neurology
       void enumerate(void);
 
    protected:
-      virtual void allocate(Allocation *allocation, SIZE_T size);
-      void allocate(Page *page, Address address, SIZE_T size, Page::State allocationType, Page::State protection);
+      virtual Address poolAddress(SIZE_T size);
+      virtual Address poolAddress(Address address, SIZE_T size, Page::State allocationType, Page::State protection);
+      virtual Address repoolAddress(Address address, SIZE_T size);
+      virtual Address unpoolAddress(Address address);
+
+      virtual void allocate(Allocation *allocation, Address address, SIZE_T size, Page::State allocationType, Page::State protection);
+      virtual void reallocate(Allocation *allocation, Address address, SIZE_T size, Page::State allocationType, Page::State protection);
    };
 
    class Page : public Allocation
@@ -137,14 +142,15 @@ namespace Neurology
       VirtualAllocator *allocator;
       Object<MEMORY_BASIC_INFORMATION> memoryInfo;
 
-   protected:
-      Page(VirtualAllocator *allocator, Address address, PMEMORY_BASIC_INFORMATION info, SIZE_T size);
-
    public:
       Page(void);
       Page(VirtualAllocator *allocator);
       Page(VirtualAllocator *allocator, Address address);
       Page(Page &page);
       ~Page(void);
+
+      void query(void);
+      
+      SIZE_T size(void) const;
    }
 }
