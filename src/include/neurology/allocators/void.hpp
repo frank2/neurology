@@ -235,6 +235,8 @@ namespace Neurology
       Allocation &parent(Allocation &allocation);
       const Allocation &parent(const Allocation &allocation) const;
       AllocationSet children(const Allocation &allocation) const;
+
+      void zeroAddress(const Address &address, SIZE_T size);
       
    protected:
       virtual Address poolAddress(SIZE_T size);
@@ -412,6 +414,8 @@ namespace Neurology
       }
 
       void deallocate(void);
+
+      void zeroFill(SIZE_T size);
       
       Data read(void) const;
       Data read(SIZE_T size) const;

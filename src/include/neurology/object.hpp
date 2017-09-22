@@ -263,6 +263,15 @@ namespace Neurology
          this->autoflush = autoflush;
       }
 
+      void reset(void)
+      {
+         if (this->built)
+            this->destruct();
+
+         if (this->allocation.isBound())
+            this->allocation.zeroFill();
+      }
+
       void assign(const BaseType &value)
       {
          /* I hate const correctness so much... */

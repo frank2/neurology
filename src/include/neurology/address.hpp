@@ -343,6 +343,8 @@ namespace Neurology
       Address(const Address &address);
       ~Address(void);
 
+      static Address Null(void);
+      
       operator Label(void) const;
 
       void operator=(const Address &address);

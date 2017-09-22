@@ -2,11 +2,12 @@
 
 using namespace Neurology;
 
-VirtualAllocator VirtualAllocator::Instance(true);
+VirtualAllocator VirtualAllocator::Instance;
 
-Page::Exception::Exception
-(VirtualAllocator *allocator, const LPWSTR message)
+VirtualAllocator::Exception::Exception
+(VirtualAllocator &allocator, const LPWSTR message)
    : Allocator::Exception(allocator, message)
+   , allocator(allocator)
 {
 }
 
@@ -28,12 +29,6 @@ VirtualAllocator::VirtualAllocator
    this->setProcessHandle(processHandle);
 }
 
-VirtualAllocator::~VirtualAllocator
-(void)
-   : ~Allocator()
-{
-}
-
 void
 VirtualAllocator::setProcessHandle
 (Handle &handle)
@@ -46,13 +41,13 @@ VirtualAllocator::setProcessHandle
 
    /* remove all pages in the allocator-- if we're declaring this another process's virtual allocator, then
       all underlying allocations become invalid. */
-   while (Allocator::MemoryPool::iterator iter=this->pooledMemory.begin();
-          iter!=this->pooledMemory.end();
-          ++iter)
-      this->unpool(iter->first);
+   for (Allocator::MemoryPool::iterator iter=this->pooledMemory.begin();
+        iter!=this->pooledMemory.end();
+        ++iter)
+      this->unpool(Address(iter->first.label()));
 
    this->processHandle = handle;
-   this->enumerate(void);
+   this->enumerate();
 }
 
 void
@@ -73,26 +68,17 @@ Page &
 VirtualAllocator::allocate
 (SIZE_T size, Page::State allocationType, Page::State protection)
 {
-   return this->allocate(NULL, size, allocationType, protection);
+   return this->allocate(Address::Null(), size, allocationType, protection);
 }
 
 Page &
 VirtualAllocator::allocate
 (Address address, SIZE_T size, Page::State allocationType, Page::State protection)
 {
-   Page &pageObj = this->pages[address];
+   Address newAddress = this->poolAddress(address, size, allocationType, protection);
 
-   pageObj->allocator = this;
-   this->allocate(&pageObj, address, size, allocationType, protection);
-
-   if (pageObj->baseAddress() != address)
-   {
-      this->pages[pageObj->baseAddress()] = pageObj;
-      address = pageObj->baseAddress();
-      this->pages.erase(address);
-   }
-
-   return this->pages[address].reference();
+   /* this creates and binds a pool, so find it and return it. */
+   return this->pages[newAddress];
 }
 
 void
@@ -101,7 +87,7 @@ VirtualAllocator::lock
 {
    this->throwIfNoPage(page);
 
-   if (!VirtualLock(page->baseAddress().pointer(), page.size()))
+   if (!VirtualLock(page.baseAddress().pointer(), page.size()))
       throw Win32Exception(EXCSTR(L"VirtualLock failed"));
 }
 
@@ -111,7 +97,7 @@ VirtualAllocator::unlock
 {
    this->throwIfNoPage(page);
 
-   if (!VirtualUnlock(page->baseAddress().pointer(), page.size()))
+   if (!VirtualUnlock(page.baseAddress().pointer(), page.size()))
       throw Win32Exception(EXCSTR(L"VirtualUnlock failed"));
 }
 
@@ -193,7 +179,7 @@ void
 VirtualAllocator::enumerate
 (void)
 {
-   Address address = NULL;
+   Address address = Label(NULL);
    Object<MEMORY_BASIC_INFORMATION> memoryInfo;
    SIZE_T size;
    bool foundEntries = false;
@@ -203,7 +189,7 @@ VirtualAllocator::enumerate
    {
       if (size != memoryInfo.size())
       {
-         memoryInfo.reallocate<MEMORY_BASIC_INFORMATION>(size);
+         memoryInfo.reallocate(size);
          continue;
       }
 
@@ -219,7 +205,7 @@ VirtualAllocator::enumerate
       }
 
       /* this constructor should automatically bind */
-      this->pages[address] = new Page(this, address, memoryInfo.pointer(), memoryInfo->RegionSize);
+      this->pages[address] = Page(this, address);
 
       address += memoryInfo->RegionSize;
    }
@@ -232,7 +218,7 @@ Address
 VirtualAllocator::poolAddress
 (SIZE_T size)
 {
-   return this->poolAddress(NULL, size, this->defaultAllocation, this->defaultProtection);
+   return this->poolAddress(Address::Null(), size, this->defaultAllocation, this->defaultProtection);
 }
 
 Address
@@ -246,13 +232,14 @@ VirtualAllocator::poolAddress
    else
       resultAddress = VirtualAllocEx(*this->processHandle, address.pointer(), size, allocationType.mask, protection.mask);
 
-   if (resultAddress == NULL)
-      throw Win32Error(EXCSTR(L"VirtualAlloc failed."));
+   if (resultAddress == Address::Null())
+      throw Win32Exception(EXCSTR(L"VirtualAlloc failed."));
 
    resultAddress = this->pooledAddresses.address(resultAddress.label());
 
    /* constructor should bind itself */
    this->pages[resultAddress] = Page(this, resultAddress);
+   this->pages[resultAddress].ownedAllocation = true;
 
    return resultAddress;
 }
@@ -277,4 +264,152 @@ VirtualAllocator::repoolAddress
    this->write(newAddress, data);
 
    return newAddress;
+}
+
+Address
+VirtualAllocator::unpoolAddress
+(Address &address)
+{
+   this->throwIfNotPooled(address);
+
+   Page &page = this->pages[address];
+
+   this->freePage(page);
+   this->pages.erase(address);
+}
+
+void
+VirtualAllocator::freePage
+(Page &page)
+{
+   BOOL result;
+   Page::State releaseState;
+   
+   this->throwIfNotPooled(page.address());
+
+   if (page.state().commit && page.state().reserve)
+      releaseState.release = 1;
+   else
+      releaseState.decommit = 1;
+
+   if (this->isLocal())
+      result = VirtualFree(page.address().pointer(), page.size(), releaseState);
+   else
+      result = VirtualFreeEx(*this->processHandle, page.address().pointer(), page.size(), releaseState);
+
+   page.memoryInfo.reset();
+
+   if (result == FALSE)
+      throw Win32Exception(EXCSTR(L"VirtualFree failed."));
+}
+
+void
+VirtualAllocator::allocate
+(Allocation *allocation, SIZE_T size)
+{
+   Address newAddress = this->poolAddress(size);
+   Page &page = this->pages[newAddress];
+   *allocation = page.slice(page.address(), size);
+}
+
+Page::Page
+(void)
+   : Allocation()
+   , ownedAllocation(false)
+   , allocator(NULL)
+{
+}
+
+Page::Page
+(VirtualAllocator *allocator)
+   : Allocation(allocator)
+   , ownedAllocation(false)
+   , allocator(allocator)
+{
+}
+
+Page::Page
+(VirtualAllocator *allocator, Address address)
+   : Allocation(allocator)
+   , ownedAllocation(false)
+   , allocator(allocator)
+{
+   this->allocator->bind(this, address);
+   this->query();
+}
+
+Page::Page
+(Page &page)
+   : Allocation(page)
+{
+   *this = page;
+}
+
+Page &
+Page::operator=
+(Page &page)
+{
+   Allocation::operator=(page);
+
+   this->ownedAllocation = page.ownedAllocation;
+   this->allocator = page.allocator;
+   this->memoryInfo = page.memoryInfo;
+}
+
+void
+Page::query
+(void)
+{
+   Label baseLabel;
+   
+   this->throwIfNotBound();
+
+   this->allocator->query(*this);
+   baseLabel = reinterpret_cast<Label>(this->memoryInfo->BaseAddress);
+
+   if (baseLabel != this->pool.minimum())
+      this->pool.rebase(baseLabel);
+   
+   if (this->memoryInfo->RegionSize != this->pool.size())
+      this->pool.setMax(baseLabel+this->memoryInfo->RegionSize);
+}
+
+Address
+Page::allocationBase
+(void)
+{
+   this->query();
+   return this->memoryInfo->AllocationBase;
+}
+
+Page::Protection
+Page::allocationProtect
+(void)
+{
+   this->query();
+   return this->memoryInfo->AllocationProtect;
+}
+
+Page::State
+Page::state
+(void)
+{
+   this->query();
+   return this->memoryInfo->State;
+}
+
+Page::Protection
+Page::protection
+(void)
+{
+   this->query();
+   return this->memoryInfo->Protect;
+}
+
+Page::State
+Page::type
+(void)
+{
+   this->query();
+   return this->memoryInfo->Type;
 }

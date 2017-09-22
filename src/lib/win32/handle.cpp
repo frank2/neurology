@@ -48,6 +48,14 @@ Handle::~Handle
 
 Handle &
 Handle::operator=
+(HANDLE handle)
+{
+   this->handle = handle;
+   return *this;
+}
+
+Handle &
+Handle::operator=
 (Handle &handle)
 {
    this->handle = handle.handle;
@@ -60,6 +68,34 @@ Handle::operator=
 {
    this->handle = handle->getHandle();
    return *this;
+}
+
+bool
+Handle::operator==
+(const Handle &handle)
+{
+   return *this->handle == *handle.handle;
+}
+
+bool
+Handle::operator==
+(HANDLE handle)
+{
+   return *this->handle == handle;
+}
+
+bool
+Handle::operator!=
+(const Handle &handle)
+{
+   return *this->handle != *handle.handle;
+}
+
+bool
+Handle::operator!=
+(HANDLE handle)
+{
+   return *this->handle == handle;
 }
 
 HANDLE &
@@ -123,33 +159,33 @@ Handle
 Handle::duplicate
 (void) 
 {
-   return this->(GetCurrentProcess()
-                 ,GetCurrentProcess()
-                 ,NULL
-                 ,FALSE
-                 ,DUPLICATE_SAME_ACCESS);
+   return this->duplicate(GetCurrentProcess()
+                          ,GetCurrentProcess()
+                          ,NULL
+                          ,FALSE
+                          ,DUPLICATE_SAME_ACCESS);
 }
 
 Handle
 Handle::duplicate
 (DWORD access, BOOL inheritHandle, DWORD options)
 {
-   return this->(GetCurrentProcess()
-                 ,GetCurrentProcess()
-                 ,access
-                 ,inheritHandle
-                 ,options);
+   return this->duplicate(GetCurrentProcess()
+                          ,GetCurrentProcess()
+                          ,access
+                          ,inheritHandle
+                          ,options);
 }
 
 Handle
 Handle::duplicate
 (Handle sourceProcess, Handle destProcess)
 {
-   return this->(sourceProcess
-                 ,destProcess
-                 ,NULL
-                 ,FALSE
-                 ,DUPLICATE_SAME_ACCESS);
+   return this->duplicate(sourceProcess
+                          ,destProcess
+                          ,NULL
+                          ,FALSE
+                          ,DUPLICATE_SAME_ACCESS);
 }
 
 Handle

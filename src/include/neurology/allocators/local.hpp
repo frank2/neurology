@@ -40,7 +40,6 @@ namespace Neurology
 
       virtual Data readAddress(const Address &address, SIZE_T size) const;
       virtual void writeAddress(const Address &destination, const Data data);
-      void zeroAddress(const Address &address, SIZE_T size);
    };
 
    Allocation nrlMalloc(SIZE_T size);

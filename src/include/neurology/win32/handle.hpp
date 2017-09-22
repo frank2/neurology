@@ -36,10 +36,13 @@ namespace Neurology
       Handle(const Handle *handle);
       ~Handle(void);
 
+      Handle &operator=(HANDLE handle);
       Handle &operator=(Handle &handle);
       Handle &operator=(const Handle *handle);
       bool operator==(const Handle &handle);
+      bool operator==(HANDLE handle);
       bool operator!=(const Handle &handle);
+      bool operator!=(HANDLE handle);
       HANDLE &operator*(void);
       const HANDLE &operator*(void) const;
 

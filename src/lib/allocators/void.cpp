@@ -599,6 +599,16 @@ Allocator::children
    return allocation.getChildren();
 }
 
+void
+Allocator::zeroAddress
+(const Address &address, SIZE_T size)
+{
+   Data data(size);
+
+   std::fill(data.begin(), data.end(), 0);
+   this->writeAddress(address, data);
+}
+
 Address
 Allocator::poolAddress
 (SIZE_T size)
@@ -1351,6 +1361,14 @@ Allocation::deallocate
    this->throwIfNotBound();
    this->allocator->throwIfNotBound(*this);
    this->allocator->unbind(this);
+}
+
+void
+Allocation::zeroFill
+(void)
+{
+   this->throwIfNotBound();
+   this->allocator->zeroAddress(this->address(), this->size());
 }
 
 Data

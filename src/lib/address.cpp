@@ -807,6 +807,13 @@ Address::~Address
       this->pool->unbind(this);
 }
 
+Address
+Address::Null
+(void)
+{
+   return AddressPool::Instance.address(Label(0));
+}
+
 Address::operator Label
 (void) const
 {
