@@ -153,14 +153,6 @@
     <ClInclude Include="..\..\src\include\neurology\configuration.hpp" />
     <ClInclude Include="..\..\src\include\neurology\exception.hpp" />
     <ClInclude Include="..\..\src\include\neurology\object.hpp" />
-    <ClInclude Include="..\..\src\include\neurology\pe\dos.hpp" />
-    <ClInclude Include="..\..\src\include\neurology\pe\file.hpp" />
-    <ClInclude Include="..\..\src\include\neurology\pe\image.hpp" />
-    <ClInclude Include="..\..\src\include\neurology\pe\nt.hpp" />
-    <ClInclude Include="..\..\src\include\neurology\pe\optional.hpp" />
-    <ClInclude Include="..\..\src\include\neurology\pe\section.hpp" />
-    <ClInclude Include="..\..\src\include\neurology\win32\process.hpp" />
-    <ClInclude Include="..\..\src\include\neurology\win32\security.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\lib\address.cpp" />
@@ -168,14 +160,6 @@
     <ClCompile Include="..\..\src\lib\allocators\void.cpp" />
     <ClCompile Include="..\..\src\lib\configuration.cpp" />
     <ClCompile Include="..\..\src\lib\exception.cpp" />
-    <ClCompile Include="..\..\src\lib\pe\dos.cpp" />
-    <ClCompile Include="..\..\src\lib\pe\file.cpp" />
-    <ClCompile Include="..\..\src\lib\pe\image.cpp" />
-    <ClCompile Include="..\..\src\lib\pe\nt.cpp" />
-    <ClCompile Include="..\..\src\lib\pe\optional.cpp" />
-    <ClCompile Include="..\..\src\lib\pe\section.cpp" />
-    <ClCompile Include="..\..\src\lib\win32\process.cpp" />
-    <ClCompile Include="..\..\src\lib\win32\security.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
