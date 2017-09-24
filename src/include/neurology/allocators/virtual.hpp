@@ -10,7 +10,7 @@
 namespace Neurology
 {
    class VirtualAllocator;
-
+   
    class Page : public Allocation
    {
       friend VirtualAllocator;
@@ -114,9 +114,11 @@ namespace Neurology
          Exception(VirtualAllocator &allocator, const LPWSTR message);
       };
 
-      typedef std::map<const Address, Page> PageObjectMap;
+      typedef std::set<Page> PageObjectSet;
+      typedef std::map<const Address, Page *> PageObjectMap;
 
    protected:
+      PageObjectSet pageObjects;
       PageObjectMap pages;
       Handle processHandle;
       Page::State defaultAllocation;
@@ -155,8 +157,9 @@ namespace Neurology
       Address poolAddress(Address address, SIZE_T size, Page::State allocationType, Page::State protection);
       
       virtual Address repoolAddress(Address &address, SIZE_T size);
-      virtual Address unpoolAddress(Address &address);
+      virtual void unpoolAddress(Address &address);
 
+      void createPage(Address &address, bool owned);
       void freePage(Page &page);
 
       virtual void allocate(Allocation *allocation, SIZE_T size);

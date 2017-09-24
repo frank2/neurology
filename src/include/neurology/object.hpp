@@ -6,7 +6,7 @@
 #include <type_traits>
 
 #include <neurology/allocators/local.hpp>
-#include <neurology/allocators/void.hpp>
+#include <neurology/allocators/virtual.hpp>
 #include <neurology/exception.hpp>
 
 namespace Neurology
@@ -191,23 +191,27 @@ namespace Neurology
          return obj;
       }
       
-      void operator=(Object &object)
+      Object &operator=(Object &object)
       {
          this->allocator = object.allocator;
          this->allocation.copy(object.allocation);
          this->built = object.built;
          this->cached = object.cached;
          this->cache = object.cache;
+         
+         return *this;
       }
 
-      void operator=(const BaseType &type)
+      Object &operator=(const BaseType &type)
       {
          this->assign(type);
+         return *this;
       }
 
-      void operator=(const PointedType type)
+      Object &operator=(const PointedType type)
       {
          this->assign(type);
+         return *this;
       }
 
       BaseType &operator*(void)
@@ -348,7 +352,7 @@ namespace Neurology
             this->flush();
       }
 
-      virtual PointedType pointer(void)
+      PointedType pointer(void)
       {
          if (!this->cached)
          {
@@ -369,7 +373,7 @@ namespace Neurology
          return reinterpret_cast<PointedType>(this->cache.data());
       }
 
-      virtual const PointedType pointer(void) const
+      const PointedType pointer(void) const
       {
          if (!this->cached)
          {
@@ -393,12 +397,12 @@ namespace Neurology
                const_cast<LPBYTE>(this->cache.data())));
       }
 
-      virtual BaseType &reference(void)
+      BaseType &reference(void)
       {
          return *this->pointer();
       }
 
-      virtual const BaseType &reference(void) const
+      const BaseType &reference(void) const
       {
          return *this->pointer();
       }
@@ -480,6 +484,126 @@ namespace Neurology
       SIZE_T size(void) const
       {
          return this->allocation.size();
+      }
+   };
+
+   template <class Type>
+   class Pointer : public Object<Type>
+   {
+      std::static_assert(std::is_pointer<Type>::value, "type must be a pointer");
+
+   public:
+      class Exception : public Object<Type>::Exception
+      {
+      public:
+         Pointer &pointer;
+
+         Exception(Pointer &pointer, const LPWSTR message)
+            : Object<Type>::Exception(pointer, message)
+            , pointer(pointer)
+         {
+         }
+      };
+
+      class VoidDereferenceException : public Exception
+      {
+      public:
+         VoidDereferenceException(Pointer &pointer)
+            : Exception(pointer, EXCSTR(L"Void pointer cannot be dereferenced."))
+         {
+         }
+      };
+
+      typedef Object<Type>::BaseType BaseType;
+      typedef Object<Type>::PointedType PointedType;
+      typedef Object<Type>::UnpointedType UnpointedType;
+      typedef typename std::conditional<
+         std::is_pointer<UnpointedType>::value
+         ,Pointer<UnpointedType>
+         ,Object<UnpointedType> >::type DereferencedType;
+
+      Pointer(void)
+         : Object<Type>()
+      {
+      }
+
+      Pointer(const BaseType &type)
+         : Object<Type>(type)
+      {
+      }
+
+      Pointer(const PointedType pointer)
+         : Object<Type>(pointer)
+      {
+      }
+
+      Pointer(const PointedType pointer, SIZE_T size)
+         : Object<Type>(pointer, size)
+      {
+      }
+
+      Pointer(const BaseType &type, SIZE_T size)
+         : Object<Type>()
+      {
+         this->assign(type, size);
+      }
+
+      Pointer(Allocator *allocator, Allocation allocation, Data cache, bool built, bool cached, bool autoflush)
+         : Object<Type>(allocator, allocation, cache, built, cached, autoflush)
+      {
+      }
+
+      Pointer &operator=(const UnpointedType &type)
+      {
+         *this->dereference() = type;
+         return *this;
+      }
+
+      DereferencedType operator[](SIZE_T index)
+      {
+         return this->dereference(index);
+      }
+
+      void assign(const UnpointedType &type)
+      {
+         this->dereference().assign(type);
+      }
+
+      void assign(const BaseType &type, SIZE_T size)
+      {
+         this->dereference().assign(reinterpret_cast<const LPVOID>(type), sizeof(UnpointedType) * size);
+      }
+
+      void reassign(const UnpointedType &type)
+      {
+         this->dereference().assign(type);
+      }
+
+      void reassign(const BaseType &type, SIZE_T size)
+      {
+         this->dereference().reassign(reinterpret_cast<const LPVOID>(type>, sizeof(UnpointedType) * size));
+      }
+
+      DereferencedType dereference(void)
+      {
+         return this->dereference(0);
+      }
+
+      DereferencedType dereference(SIZE_T index)
+      {
+         if (std::is_void<UnpointedType>::value)
+            throw VoidDereferenceException(*this);
+            
+         SIZE_T offset = sizeof(UnpointedType) * index;
+         Address address(*this->reference() + offset);
+         Allocation &foundAllocation = this->allocator.find(address);
+
+         return DereferenceType(this->allocator
+                                ,foundAllocation.slice(address, sizeof(UnpointedType))
+                                ,foundAllocation.read(address, sizeof(UnpointedType))
+                                ,true
+                                ,this->cached
+                                ,this->autoflush);
       }
    };
 }

@@ -70,7 +70,7 @@ LocalAllocator::repoolAddress
                                          ,min(this->pooledMemory[address]
                                               ,newSize)));
    
-   /* delete the old address, but don't unpool it-- that'll nuke all the allocations */
+   /* delete the old address, but don't unpool its bindings-- that'll nuke all the allocations */
    if (newAddress != address)
       this->unpoolAddress(address);
 

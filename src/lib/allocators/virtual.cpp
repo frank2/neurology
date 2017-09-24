@@ -4,6 +4,108 @@ using namespace Neurology;
 
 VirtualAllocator VirtualAllocator::Instance;
 
+Page::Page
+(void)
+   : Allocation()
+   , ownedAllocation(false)
+   , allocator(NULL)
+{
+}
+
+Page::Page
+(VirtualAllocator *allocator)
+   : Allocation(allocator)
+   , ownedAllocation(false)
+   , allocator(allocator)
+{
+}
+
+Page::Page
+(VirtualAllocator *allocator, Address address)
+   : Allocation(allocator)
+   , ownedAllocation(false)
+   , allocator(allocator)
+{
+   this->allocator->bind(this, address);
+   this->query();
+}
+
+Page::Page
+(Page &page)
+   : Allocation(page)
+{
+   *this = page;
+}
+
+Page &
+Page::operator=
+(Page &page)
+{
+   Allocation::operator=(page);
+
+   this->ownedAllocation = page.ownedAllocation;
+   this->allocator = page.allocator;
+   this->memoryInfo = page.memoryInfo;
+}
+
+void
+Page::query
+(void)
+{
+   Label baseLabel;
+   
+   this->throwIfNotBound();
+
+   this->allocator->query(*this);
+   baseLabel = reinterpret_cast<Label>(this->memoryInfo->BaseAddress);
+
+   if (baseLabel != this->pool.minimum())
+      this->pool.rebase(baseLabel);
+   
+   if (this->memoryInfo->RegionSize != this->pool.size())
+      this->pool.setMax(baseLabel+this->memoryInfo->RegionSize);
+}
+
+Address
+Page::allocationBase
+(void)
+{
+   this->query();
+   return this->memoryInfo->AllocationBase;
+}
+
+Page::Protection
+Page::allocationProtect
+(void)
+{
+   this->query();
+   return this->memoryInfo->AllocationProtect;
+}
+
+Page::State
+Page::state
+(void)
+{
+   this->query();
+   return this->memoryInfo->State;
+}
+
+Page::Protection
+Page::protection
+(void)
+{
+   this->query();
+   return this->memoryInfo->Protect;
+}
+
+Page::State
+Page::type
+(void)
+{
+   this->query();
+   return this->memoryInfo->Type;
+}
+
 VirtualAllocator::Exception::Exception
 (VirtualAllocator &allocator, const LPWSTR message)
    : Allocator::Exception(allocator, message)
@@ -78,7 +180,7 @@ VirtualAllocator::allocate
    Address newAddress = this->poolAddress(address, size, allocationType, protection);
 
    /* this creates and binds a pool, so find it and return it. */
-   return this->pages[newAddress];
+   return *this->pages[newAddress];
 }
 
 void
@@ -204,9 +306,7 @@ VirtualAllocator::enumerate
          continue;
       }
 
-      /* this constructor should automatically bind */
-      this->pages[address] = Page(this, address);
-
+      this->createPage(address, false);
       address += memoryInfo->RegionSize;
    }
 
@@ -226,6 +326,7 @@ VirtualAllocator::poolAddress
 (Address address, SIZE_T size, Page::State allocationType, Page::State protection)
 {
    Address resultAddress;
+   std::pair<PageObjectSet::iterator,bool> insertion;
 
    if (this->isLocal())
       resultAddress = VirtualAlloc(address.pointer(), size, allocationType.mask, protection.mask);
@@ -237,9 +338,10 @@ VirtualAllocator::poolAddress
 
    resultAddress = this->pooledAddresses.address(resultAddress.label());
 
-   /* constructor should bind itself */
-   this->pages[resultAddress] = Page(this, resultAddress);
-   this->pages[resultAddress].ownedAllocation = true;
+   if (this->pages.count(resultAddress) == 0)
+      this->createPage(resultAddress, true);
+   else
+      this->pages[resultAddress]->query();
 
    return resultAddress;
 }
@@ -253,29 +355,59 @@ VirtualAllocator::repoolAddress
 
    this->throwIfNotPooled(address);
 
-   Page &page = this->pages[address];
-   data = page.read();
+   Page &page = *this->pages[address];
+   data = page.read(min(page.size(), newSize));
 
    /* call freePage instead of deallocate/unbind/etc so that the unbinding process doesn't actually happen.
       what will happen instead is that the original page allocation will be overwritten with the new
       allocation information. */
-   this->freePage(page);
    newAddress = this->poolAddress(address, newSize, page.memoryInfo->Type, page.memoryInfo->AllocationProtect);
    this->write(newAddress, data);
+
+   /* move the page to the new address, then erase it from the pages */
+   if (newAddress != address)
+   {
+      PageObjectSet::iterator pageIter;
+      Page &newPage = *this->pages[newAddress];
+      
+      this->rebind(&page, newAddress);
+      page.query();
+      
+      this->pages.erase(address);
+      this->pages[newAddress] = &page;
+      
+      pageIter = this->pageObjects.find(newPage);
+
+      if (pageIter != this->pageObjects.end)
+         this->pageObjects.erase(*pageIter);
+   }
 
    return newAddress;
 }
 
-Address
+void
 VirtualAllocator::unpoolAddress
 (Address &address)
 {
    this->throwIfNotPooled(address);
 
-   Page &page = this->pages[address];
+   Page &page = *this->pages[address];
 
    this->freePage(page);
    this->pages.erase(address);
+
+   if (this->pageObjects.find(page) != this->pageObjects.end())
+      this->pageObjects.erase(page);
+}
+
+void
+VirtualAllocator::createPage
+(Address &address, bool owned)
+{
+   std::pair<PageObjectSet::iterator, bool> insertion;
+
+   insertion = this->pageObjects.insert(Page(this, address));
+   this->pages[address] = &(*insertion.first);
 }
 
 void
@@ -308,108 +440,6 @@ VirtualAllocator::allocate
 (Allocation *allocation, SIZE_T size)
 {
    Address newAddress = this->poolAddress(size);
-   Page &page = this->pages[newAddress];
+   Page &page = *this->pages[newAddress];
    *allocation = page.slice(page.address(), size);
-}
-
-Page::Page
-(void)
-   : Allocation()
-   , ownedAllocation(false)
-   , allocator(NULL)
-{
-}
-
-Page::Page
-(VirtualAllocator *allocator)
-   : Allocation(allocator)
-   , ownedAllocation(false)
-   , allocator(allocator)
-{
-}
-
-Page::Page
-(VirtualAllocator *allocator, Address address)
-   : Allocation(allocator)
-   , ownedAllocation(false)
-   , allocator(allocator)
-{
-   this->allocator->bind(this, address);
-   this->query();
-}
-
-Page::Page
-(Page &page)
-   : Allocation(page)
-{
-   *this = page;
-}
-
-Page &
-Page::operator=
-(Page &page)
-{
-   Allocation::operator=(page);
-
-   this->ownedAllocation = page.ownedAllocation;
-   this->allocator = page.allocator;
-   this->memoryInfo = page.memoryInfo;
-}
-
-void
-Page::query
-(void)
-{
-   Label baseLabel;
-   
-   this->throwIfNotBound();
-
-   this->allocator->query(*this);
-   baseLabel = reinterpret_cast<Label>(this->memoryInfo->BaseAddress);
-
-   if (baseLabel != this->pool.minimum())
-      this->pool.rebase(baseLabel);
-   
-   if (this->memoryInfo->RegionSize != this->pool.size())
-      this->pool.setMax(baseLabel+this->memoryInfo->RegionSize);
-}
-
-Address
-Page::allocationBase
-(void)
-{
-   this->query();
-   return this->memoryInfo->AllocationBase;
-}
-
-Page::Protection
-Page::allocationProtect
-(void)
-{
-   this->query();
-   return this->memoryInfo->AllocationProtect;
-}
-
-Page::State
-Page::state
-(void)
-{
-   this->query();
-   return this->memoryInfo->State;
-}
-
-Page::Protection
-Page::protection
-(void)
-{
-   this->query();
-   return this->memoryInfo->Protect;
-}
-
-Page::State
-Page::type
-(void)
-{
-   this->query();
-   return this->memoryInfo->Type;
 }
