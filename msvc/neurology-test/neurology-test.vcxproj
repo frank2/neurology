@@ -159,6 +159,7 @@
     <ClInclude Include="..\..\src\test\tests\address.hpp" />
     <ClInclude Include="..\..\src\test\tests\localalloc.hpp" />
     <ClInclude Include="..\..\src\test\tests\object.hpp" />
+    <ClInclude Include="..\..\src\test\tests\virtualalloc.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\test\main.cpp" />
@@ -166,6 +167,7 @@
     <ClCompile Include="..\..\src\test\tests\address.cpp" />
     <ClCompile Include="..\..\src\test\tests\localalloc.cpp" />
     <ClCompile Include="..\..\src\test\tests\object.cpp" />
+    <ClCompile Include="..\..\src\test\tests\virtualalloc.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

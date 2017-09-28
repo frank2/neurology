@@ -15,6 +15,14 @@ void
 ObjectTest::run
 (FailVector *failures)
 {
+   this->objectTest(failures);
+   this->pointerTest(failures);
+}
+
+void
+ObjectTest::objectTest
+(FailVector *failures)
+{
    /* test void objects */
    int externalInt;
    Object<void> voidObject;
@@ -69,4 +77,21 @@ ObjectTest::run
    NASSERT((*structObject).s == 0xBEEF);
    NASSERT((*structObject).i == 0xDEFACED1);
    NASSERT((*structObject).uintptr == 0xABAD1DEAB00BFACE);
+}
+
+void
+ObjectTest::pointerTest
+(FailVector *failures)
+{
+   unsigned int stackInt;
+   Pointer<unsigned int> intPtr;
+
+   VirtualAllocator::Instance.enumerate();
+   intPtr.setAllocator(&VirtualAllocator::Instance);
+   
+   intPtr = &stackInt;
+   *intPtr = 0xDEADBEEF;
+
+   NASSERT(**intPtr == 0xDEADBEEF);
+   NASSERT(stackInt == 0xDEADBEEF);
 }

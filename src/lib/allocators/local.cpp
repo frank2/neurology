@@ -19,19 +19,19 @@ Neurology::CopyData
    }
 }
 
-LocalAllocator::Exception::Exception
-(LocalAllocator &allocator, const LPWSTR message)
-   : Allocator::Exception(allocator, message)
-{
-}
-
-LocalAllocator::KernelFaultException::KernelFaultException
-(LocalAllocator &allocator, LONG status, Address &source, Address &destination, SIZE_T size)
-   : LocalAllocator::Exception(allocator, EXCSTR(L"Kernel fault occured during operation on addresses."))
+KernelFaultException::KernelFaultException
+(LONG status, Address &source, Address &destination, SIZE_T size)
+   : Neurology::Exception(EXCSTR(L"Kernel fault occured during operation on addresses."))
    , status(status)
    , source(source)
    , destination(destination)
    , size(size)
+{
+}
+
+LocalAllocator::Exception::Exception
+(LocalAllocator &allocator, const LPWSTR message)
+   : Allocator::Exception(allocator, message)
 {
 }
 
@@ -103,8 +103,7 @@ LocalAllocator::readAddress
    status = CopyData(result.data(), address.pointer(), size);
 
    if (status != 0)
-      throw KernelFaultException(const_cast<LocalAllocator &>(*this)
-                                 ,status
+      throw KernelFaultException(status
                                  ,const_cast<Address &>(address)
                                  ,Address(result.data())
                                  ,size);
@@ -125,23 +124,12 @@ LocalAllocator::writeAddress
                      ,data.size());
 
    if (status != 0)
-      throw KernelFaultException(*this
-                                 ,status
+      throw KernelFaultException(status
                                  ,Address(
                                     static_cast<LPVOID>(
                                        const_cast<LPBYTE>(data.data())))
                                  ,const_cast<Address &>(destination)
                                  ,data.size());
-}
-
-void
-LocalAllocator::zeroAddress
-(const Address &address, SIZE_T size)
-{
-   Data data(size);
-
-   std::fill(data.begin(), data.end(), 0);
-   this->writeAddress(address, data);
 }
 
 Allocation

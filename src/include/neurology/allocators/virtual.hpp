@@ -3,12 +3,17 @@
 #include <windows.h>
 
 #include <neurology/address.hpp>
-#include <neurology/allocators/void.hpp>
+#include <neurology/allocators/local.hpp>
+#include <neurology/object.hpp>
 #include <neurology/win32/access.hpp>
 #include <neurology/win32/handle.hpp>
 
 namespace Neurology
 {
+   /* I know it betrays the order of the other allocators, but C++ wouldn't let me compile unless I wrote
+      them in this order /shrug
+   */
+   
    class VirtualAllocator;
    
    class Page : public Allocation
@@ -33,7 +38,7 @@ namespace Neurology
                BYTE guard : 1;
                BYTE noCache : 1;
                BYTE writeCombine : 1;
-               BYTE __padding : 19;
+               DWORD __padding : 19;
                BYTE targetsInvalid : 1;
                BYTE revertToFileMap : 1;
             };
@@ -51,7 +56,7 @@ namespace Neurology
          {
             struct
             {
-               BYTE __padding : 12;
+               WORD __padding : 12;
                BYTE commit : 1;
                BYTE reserve : 1;
                BYTE decommit : 1;
@@ -99,6 +104,8 @@ namespace Neurology
       State state(void);
       Protection protection(void);
       State type(void);
+
+      void release(void);
    };
 
    class VirtualAllocator : public Allocator
@@ -114,11 +121,17 @@ namespace Neurology
          Exception(VirtualAllocator &allocator, const LPWSTR message);
       };
 
-      typedef std::set<Page> PageObjectSet;
+      class NoSuchPageException : public Exception
+      {
+      public:
+         Page &page;
+
+         NoSuchPageException(VirtualAllocator &allocator, Page &page);
+      };
+
       typedef std::map<const Address, Page *> PageObjectMap;
 
    protected:
-      PageObjectSet pageObjects;
       PageObjectMap pages;
       Handle processHandle;
       Page::State defaultAllocation;
@@ -129,6 +142,7 @@ namespace Neurology
 
       VirtualAllocator(void);
       VirtualAllocator(Handle &processHandle);
+      ~VirtualAllocator(void);
 
       bool hasPage(Page &page) const noexcept;
 
@@ -152,6 +166,17 @@ namespace Neurology
 
       void enumerate(void);
 
+      template <class Type>
+      Pointer<Type> pointer(Address address)
+      {
+         this->throwIfNoAddress(address);
+         
+         Pointer<Type> result = reinterpret_cast<typename Pointer<Type>::BaseType>(address.pointer());
+         result.setAllocator(this);
+
+         return result;
+      }
+
    protected:
       virtual Address poolAddress(SIZE_T size);
       Address poolAddress(Address address, SIZE_T size, Page::State allocationType, Page::State protection);
@@ -160,8 +185,11 @@ namespace Neurology
       virtual void unpoolAddress(Address &address);
 
       void createPage(Address &address, bool owned);
-      void freePage(Page &page);
+      void freePage(Address &address);
 
       virtual void allocate(Allocation *allocation, SIZE_T size);
+
+      virtual Data readAddress(const Address &address, SIZE_T size) const;
+      virtual void writeAddress(const Address &address, const Data data);
    };
 }

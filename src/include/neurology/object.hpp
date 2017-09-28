@@ -6,7 +6,6 @@
 #include <type_traits>
 
 #include <neurology/allocators/local.hpp>
-#include <neurology/allocators/virtual.hpp>
 #include <neurology/exception.hpp>
 
 namespace Neurology
@@ -104,6 +103,15 @@ namespace Neurology
          SizeTooSmallException(const Object &object, SIZE_T size)
             : Exception(object, EXCSTR(L"The requested size is too small to contain the base type."))
             , size(size)
+         {
+         }
+      };
+
+      class HotSwapException : public Exception
+      {
+      public:
+         HotSwapException(const Object &object)
+            : Exception(object, EXCSTR(L"Object already has a bound allocation."))
          {
          }
       };
@@ -488,18 +496,16 @@ namespace Neurology
    };
 
    template <class Type>
-   class Pointer : public Object<Type>
+   class Pointer : public Object<Type *>
    {
-      std::static_assert(std::is_pointer<Type>::value, "type must be a pointer");
-
    public:
-      class Exception : public Object<Type>::Exception
+      class Exception : public Object<Type *>::Exception
       {
       public:
          Pointer &pointer;
 
          Exception(Pointer &pointer, const LPWSTR message)
-            : Object<Type>::Exception(pointer, message)
+            : Object<Type *>::Exception(pointer, message)
             , pointer(pointer)
          {
          }
@@ -514,48 +520,54 @@ namespace Neurology
          }
       };
 
-      typedef Object<Type>::BaseType BaseType;
-      typedef Object<Type>::PointedType PointedType;
-      typedef Object<Type>::UnpointedType UnpointedType;
+      typedef typename Object<Type *>::BaseType BaseType;
+      typedef typename Object<Type *>::PointedType PointedType;
+      typedef typename Object<Type *>::UnpointedType UnpointedType;
       typedef typename std::conditional<
          std::is_pointer<UnpointedType>::value
          ,Pointer<UnpointedType>
          ,Object<UnpointedType> >::type DereferencedType;
 
       Pointer(void)
-         : Object<Type>()
+         : Object<Type *>()
       {
       }
 
       Pointer(const BaseType &type)
-         : Object<Type>(type)
+         : Object<Type *>(type)
       {
       }
 
       Pointer(const PointedType pointer)
-         : Object<Type>(pointer)
+         : Object<Type *>(pointer)
       {
       }
 
       Pointer(const PointedType pointer, SIZE_T size)
-         : Object<Type>(pointer, size)
+         : Object<Type *>(pointer, size)
       {
-      }
-
-      Pointer(const BaseType &type, SIZE_T size)
-         : Object<Type>()
-      {
-         this->assign(type, size);
       }
 
       Pointer(Allocator *allocator, Allocation allocation, Data cache, bool built, bool cached, bool autoflush)
-         : Object<Type>(allocator, allocation, cache, built, cached, autoflush)
+         : Object<Type *>(allocator, allocation, cache, built, cached, autoflush)
       {
       }
 
       Pointer &operator=(const UnpointedType &type)
       {
-         *this->dereference() = type;
+         this->assign(type);
+         return *this;
+      }
+
+      Pointer &operator=(const BaseType &type)
+      {
+         Object<Type *>::assign(type);
+         return *this;
+      }
+
+      Pointer &operator=(const PointedType type)
+      {
+         Object<Type *>::assign(type);
          return *this;
       }
 
@@ -564,24 +576,19 @@ namespace Neurology
          return this->dereference(index);
       }
 
+      DereferencedType operator*(void)
+      {
+         return this->dereference();
+      }
+
       void assign(const UnpointedType &type)
       {
          this->dereference().assign(type);
       }
 
-      void assign(const BaseType &type, SIZE_T size)
-      {
-         this->dereference().assign(reinterpret_cast<const LPVOID>(type), sizeof(UnpointedType) * size);
-      }
-
       void reassign(const UnpointedType &type)
       {
          this->dereference().assign(type);
-      }
-
-      void reassign(const BaseType &type, SIZE_T size)
-      {
-         this->dereference().reassign(reinterpret_cast<const LPVOID>(type>, sizeof(UnpointedType) * size));
       }
 
       DereferencedType dereference(void)
@@ -595,15 +602,15 @@ namespace Neurology
             throw VoidDereferenceException(*this);
             
          SIZE_T offset = sizeof(UnpointedType) * index;
-         Address address(*this->reference() + offset);
-         Allocation &foundAllocation = this->allocator.find(address);
+         Address address(reinterpret_cast<Label>(this->reference()) + offset);
+         Allocation &foundAllocation = this->allocator->find(address, sizeof(UnpointedType));
 
-         return DereferenceType(this->allocator
-                                ,foundAllocation.slice(address, sizeof(UnpointedType))
-                                ,foundAllocation.read(address, sizeof(UnpointedType))
-                                ,true
-                                ,this->cached
-                                ,this->autoflush);
+         return DereferencedType(this->allocator
+                                 ,foundAllocation.slice(address, sizeof(UnpointedType))
+                                 ,foundAllocation.read(address, sizeof(UnpointedType))
+                                 ,true
+                                 ,this->cached
+                                 ,this->autoflush);
       }
    };
 }

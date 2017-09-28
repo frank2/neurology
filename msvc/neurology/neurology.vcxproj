@@ -149,17 +149,21 @@
     <ClInclude Include="..\..\src\include\neurology\address.hpp" />
     <ClInclude Include="..\..\src\include\neurology\allocators.hpp" />
     <ClInclude Include="..\..\src\include\neurology\allocators\local.hpp" />
+    <ClInclude Include="..\..\src\include\neurology\allocators\virtual.hpp" />
     <ClInclude Include="..\..\src\include\neurology\allocators\void.hpp" />
     <ClInclude Include="..\..\src\include\neurology\configuration.hpp" />
     <ClInclude Include="..\..\src\include\neurology\exception.hpp" />
     <ClInclude Include="..\..\src\include\neurology\object.hpp" />
+    <ClInclude Include="..\..\src\include\neurology\win32\handle.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\lib\address.cpp" />
     <ClCompile Include="..\..\src\lib\allocators\local.cpp" />
+    <ClCompile Include="..\..\src\lib\allocators\virtual.cpp" />
     <ClCompile Include="..\..\src\lib\allocators\void.cpp" />
     <ClCompile Include="..\..\src\lib\configuration.cpp" />
     <ClCompile Include="..\..\src\lib\exception.cpp" />
+    <ClCompile Include="..\..\src\lib\win32\handle.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

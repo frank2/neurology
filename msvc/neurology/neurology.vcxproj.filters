@@ -63,6 +63,12 @@
     <ClInclude Include="..\..\src\include\neurology\object.hpp">
       <Filter>Header Files\neurology</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\src\include\neurology\allocators\virtual.hpp">
+      <Filter>Header Files\neurology\allocators</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\include\neurology\win32\handle.hpp">
+      <Filter>Header Files\neurology\win32</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\lib\exception.cpp">
@@ -79,6 +85,12 @@
     </ClCompile>
     <ClCompile Include="..\..\src\lib\allocators\local.cpp">
       <Filter>Source Files\allocators</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\lib\allocators\virtual.cpp">
+      <Filter>Source Files\allocators</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\lib\win32\handle.cpp">
+      <Filter>Source Files\win32</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

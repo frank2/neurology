@@ -1218,7 +1218,7 @@ Allocation::address
 (SIZE_T offset)
 {
    this->throwIfNotBound();
-   return this->pool.address(this->pool.minimum() + offset);
+   return this->address() + offset;
 }
 
 Address
@@ -1233,7 +1233,7 @@ Allocation::address
 
    this->pool.throwIfNotInRange(newLabel);
 
-   return Address(this->pool.minimum() + offset);
+   return this->address() + offset;
 }
 
 Address

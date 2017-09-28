@@ -10,6 +10,16 @@
 namespace Neurology
 {
    LONG CopyData(LPVOID destination, const LPVOID source, SIZE_T size);
+
+   class KernelFaultException : public Exception
+   {
+   public:
+      LONG status;
+      Address &source, &destination;
+      SIZE_T size;
+
+      KernelFaultException(LONG status, Address &source, Address &destination, SIZE_T size);
+   };
    
    class LocalAllocator : public Allocator
    {
@@ -20,16 +30,6 @@ namespace Neurology
       {
       public:
          Exception(LocalAllocator &allocator, const LPWSTR message);
-      };
-
-      class KernelFaultException : public Exception
-      {
-      public:
-         LONG status;
-         Address &source, &destination;
-         SIZE_T size;
-
-         KernelFaultException(LocalAllocator &allocator, LONG status, Address &source, Address &destination, SIZE_T size);
       };
 
       LocalAllocator(void);
