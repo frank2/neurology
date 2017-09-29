@@ -19,7 +19,7 @@ namespace Neurology
          Exception(const Process &process, const LPWSTR message);
       };
 
-      typedef PID DWORD;
+      typedef DWORD PID;
       
       struct AccessMask
       {

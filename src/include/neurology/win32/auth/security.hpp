@@ -2,6 +2,8 @@
 
 #include <windows.h>
 
+#include <neurology/win32/handle.hpp>
+
 namespace Neurology
 {
    struct SecurityInformation
@@ -33,4 +35,20 @@ namespace Neurology
       SecurityInformation(DWORD mask) { this->mask = mask; }
       operator DWORD (void) { return this->mask; }
    };
+
+   class SecurityDescriptor
+   {
+   protected:
+      PSID owner, group;
+      PACL dacl, sacl;
+      PSECURITY_DESCRIPTOR descriptor;
+
+   public:
+      SecurityDescriptor(void);
+      SecurityDescriptor(PSECURITY_DESCRIPTOR descriptor);
+   };
+
+   class Security
+   {
+   protected:
 }
