@@ -9,6 +9,9 @@
 
 namespace Neurology
 {
+   /**
+      Copy data from one process-local buffer to another.
+   */
    LONG CopyData(LPVOID destination, const LPVOID source, SIZE_T size);
 
    class KernelFaultException : public Exception

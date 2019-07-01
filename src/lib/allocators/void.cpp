@@ -316,21 +316,6 @@ Allocator::address
    return allocation.address(offset);
 }
 
-Address
-Allocator::newAddress
-(Allocation &allocation)
-{
-   return this->newAddress(allocation, 0);
-}
-
-Address
-Allocator::newAddress
-(Allocation &allocation, SIZE_T offset)
-{
-   this->throwIfNotBound(allocation);
-   return allocation.address(offset);
-}
-
 SIZE_T
 Allocator::bindCount
 (const Address &address) const

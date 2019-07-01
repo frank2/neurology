@@ -15,6 +15,9 @@ namespace Neurology
    class Exception
    {
    public:
+      /**
+         A unicode explanation for the given exception.
+      */
       const LPWSTR explanation;
 
       Exception(const LPWSTR message);
@@ -23,6 +26,9 @@ namespace Neurology
    class Win32Exception : public Exception
    {
    public:
+      /**
+         A DWORD pointing to the specific Windows error.
+      */
       DWORD error;
 
       Win32Exception(const LPWSTR message);
