@@ -2,8 +2,6 @@
 
 using namespace Neurology;
 
-VirtualAllocator VirtualAllocator::Instance;
-
 Page::Page
 (void)
    : Allocation()
@@ -203,6 +201,7 @@ VirtualAllocator::setProcessHandle
 
    this->processHandle = handle;
    this->enumerate();
+   this->local = false;
 }
 
 void
@@ -491,7 +490,6 @@ VirtualAllocator::freePage
 (Address &address)
 {
    BOOL result;
-   Page::State pageState, releaseState;
    Page *pointer;
    Object<MEMORY_BASIC_INFORMATION> memoryInfo;
    SIZE_T memorySize;
@@ -503,7 +501,10 @@ VirtualAllocator::freePage
    memoryInfo.construct();
    memorySize = this->query(address, memoryInfo.pointer(), memoryInfo.size());
 
-   if (memorySize != memoryInfo.size())
+   if (memorySize == 0 && (this->isLocal() || !this->processHandle.isNull()))
+      throw Win32Exception(EXCSTR(L"VirtualQuery/VirtualQueryEx failed."));
+
+   if (memorySize != 0 && memorySize != memoryInfo.size())
    {
       memoryInfo.reallocate(memorySize);
       memorySize = this->query(address, memoryInfo.pointer(), memoryInfo.size());
@@ -512,23 +513,17 @@ VirtualAllocator::freePage
          throw Win32Exception(EXCSTR(L"VirtualQuery/VirtualQueryEx failed."));
    }
 
-   if (address != memoryInfo->BaseAddress)
+   if (memorySize != 0 && address != memoryInfo->BaseAddress)
       throw Allocator::AddressNotFoundException(*this, address);
    
    pointer = this->pages[address];
-   pageState = memoryInfo->State;
 
-   if (pageState.commit && pageState.reserve)
-      releaseState.release = 1;
-   else
-      releaseState.decommit = 1;
-
-   if (pointer->ownedAllocation)
+   if (memorySize != 0 && pointer->ownedAllocation)
    {
       if (this->isLocal())
-         result = VirtualFree(memoryInfo->BaseAddress, memoryInfo->RegionSize, releaseState);
+         result = VirtualFree(memoryInfo->BaseAddress, 0, MEM_RELEASE);
       else
-         result = VirtualFreeEx(*this->processHandle, memoryInfo->BaseAddress, memoryInfo->RegionSize, releaseState);
+         result = VirtualFreeEx(*this->processHandle, memoryInfo->BaseAddress, 0, MEM_RELEASE);
       
       if (result == FALSE)
          throw Win32Exception(EXCSTR(L"VirtualFree failed."));

@@ -33,12 +33,6 @@ Handle::Handle
    *this = handle;
 }
 
-Handle::Handle
-(const Handle *handle)
-{
-   *this = handle;
-}
-
 Handle::~Handle
 (void)
 {
@@ -59,14 +53,6 @@ Handle::operator=
 (Handle &handle)
 {
    this->handle = handle.handle;
-   return *this;
-}
-
-Handle &
-Handle::operator=
-(const Handle *handle)
-{
-   this->handle = handle->getHandle();
    return *this;
 }
 

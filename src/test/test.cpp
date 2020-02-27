@@ -46,6 +46,22 @@ Test::assertMacro
       failures->push_back(TestFailure(test, expression, line, fileName));
 }
 
+void
+Test::exceptionMacro
+(FailVector *failures, const char *test, const char *expression, bool expected, bool result, std::uintptr_t line, const char *fileName)
+
+{
+   bool conclusion = (expected == result);
+   this->assertMessage(L"[%s] [%S] exception: %S... %s"
+                       ,(conclusion) ? L"+" : L"!"
+                       ,test
+                       ,expression
+                       ,(conclusion) ? L"success" : L"failure");
+
+   if (!conclusion)
+      failures->push_back(TestFailure(test, expression, line, fileName));
+}
+
 TestFailure::TestFailure
 (void)
    : test(NULL)

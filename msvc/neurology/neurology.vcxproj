@@ -154,7 +154,9 @@
     <ClInclude Include="..\..\src\include\neurology\configuration.hpp" />
     <ClInclude Include="..\..\src\include\neurology\exception.hpp" />
     <ClInclude Include="..\..\src\include\neurology\object.hpp" />
+    <ClInclude Include="..\..\src\include\neurology\win32.hpp" />
     <ClInclude Include="..\..\src\include\neurology\win32\handle.hpp" />
+    <ClInclude Include="..\..\src\include\neurology\win32\process.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\lib\address.cpp" />
@@ -164,6 +166,7 @@
     <ClCompile Include="..\..\src\lib\configuration.cpp" />
     <ClCompile Include="..\..\src\lib\exception.cpp" />
     <ClCompile Include="..\..\src\lib\win32\handle.cpp" />
+    <ClCompile Include="..\..\src\lib\win32\process.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

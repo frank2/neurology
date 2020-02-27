@@ -28,17 +28,15 @@ namespace Neurology
 
    protected:
       Object<HANDLE> handle;
-
+      
    public:
       Handle(void);
       Handle(HANDLE handle);
       Handle(Handle &handle);
-      Handle(const Handle *handle);
       ~Handle(void);
 
       Handle &operator=(HANDLE handle);
       Handle &operator=(Handle &handle);
-      Handle &operator=(const Handle *handle);
       bool operator==(const Handle &handle);
       bool operator==(HANDLE handle);
       bool operator!=(const Handle &handle);

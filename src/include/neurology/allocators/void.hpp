@@ -351,8 +351,13 @@ namespace Neurology
       Address pool(SIZE_T size);
 
       /**
-         Move the given address to this allocator with 
+         Move the given address to this allocator with the given size.
+      */
       Address repool(Address &address, SIZE_T newSize);
+      
+      /**
+         Remove the given address from the address pool.
+      */
       void unpool(Address &address);
       
       Allocation &find(const Address &address) const;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <neurology/win32/process.hpp>
 #include <neurology/allocators/virtual.hpp>
 
 #include "../test.hpp"

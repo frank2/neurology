@@ -57,7 +57,7 @@ LocalAllocatorTest::testAllocator
    NASSERT(allocator.addressOf(allocation) == allocAddress);
    NASSERT(allocator.address(allocation, 4) == allocAddress+4);
 
-   cmpAddress = allocator.newAddress(allocation);
+   cmpAddress = allocator.address(allocation);
 
    NASSERT(allocAddress == cmpAddress);
    NASSERT(!allocAddress.sharesIdentity(cmpAddress));

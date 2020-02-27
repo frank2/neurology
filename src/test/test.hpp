@@ -11,6 +11,16 @@
 #define NEXPAND(exp) #exp
 #define NSTR(exp) NEXPAND(exp)
 #define NASSERT(expression) this->assertMacro(failures, typeid(*this).name(), NSTR(expression), (expression), __LINE__, __FILE__)
+#define NEXCEPT(expression, expected) try                \
+   {\
+      expression;\
+      this->exceptionMacro(failures, typeid(*this).name(), NSTR(expression), expected, false, __LINE__, __FILE__); \
+   }\
+   catch (Neurology::Exception &e)\
+   {\
+      this->assertMessage(L"Exception raised: %s", e.explanation); \
+      this->exceptionMacro(failures, typeid(*this).name(), NSTR(expression), expected, true, __LINE__, __FILE__); \
+   }
 
 namespace NeurologyTest
 {
@@ -35,6 +45,8 @@ namespace NeurologyTest
 
       void assertMacro(FailVector *failures, const char *test, const char *expression
                        ,bool result, std::uintptr_t line, const char *fileName);
+      void exceptionMacro(FailVector *failures, const char *test, const char *expression
+                          ,bool expected, bool result, std::uintptr_t line, const char *fileName);
    };
 
    class TestFailure

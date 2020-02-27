@@ -85,9 +85,10 @@ ObjectTest::pointerTest
 {
    unsigned int stackInt;
    Pointer<unsigned int> intPtr;
+   VirtualAllocator allocator;
 
-   VirtualAllocator::Instance.enumerate();
-   intPtr.setAllocator(&VirtualAllocator::Instance);
+   allocator.enumerate();
+   intPtr.setAllocator(&allocator);
    
    intPtr = &stackInt;
    *intPtr = 0xDEADBEEF;

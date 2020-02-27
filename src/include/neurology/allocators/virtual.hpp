@@ -5,7 +5,6 @@
 #include <neurology/address.hpp>
 #include <neurology/allocators/local.hpp>
 #include <neurology/object.hpp>
-#include <neurology/win32/access.hpp>
 #include <neurology/win32/handle.hpp>
 
 namespace Neurology
@@ -138,8 +137,6 @@ namespace Neurology
       Page::State defaultProtection;
       
    public:
-      static VirtualAllocator Instance;
-
       VirtualAllocator(void);
       VirtualAllocator(Handle &processHandle);
       ~VirtualAllocator(void);
@@ -175,6 +172,32 @@ namespace Neurology
          result.setAllocator(this);
 
          return result;
+      }
+
+      template <class Type>
+      Object<Type> object(Address address)
+      {
+         return this->object<Type>(address, sizeof(Type));
+      }
+
+      template <class Type>
+      Object<Type> object(Address address, SIZE_T size)
+      {
+         Object<Type> newObject;
+         Allocation newAllocation;
+         Data data;
+         
+         this->throwIfNoAddress(address);
+
+         /* we explicitly capture the reference here so that the new allocation
+            gets bound to the found allocation and doesn't get caught up in
+            the destructor */
+         Allocation &foundAllocation = this->find(address, size);
+         newAllocation = this->spawn(&foundAllocation, address, size);
+         data = this->readAddress(address, size);
+         newObject = Object<Type>(this, newAllocation, data, false, true, false);
+
+         return newObject;
       }
 
    protected:

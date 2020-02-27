@@ -181,7 +181,7 @@ namespace Neurology
 
       ~Object(void)
       {
-         if (this->cached)
+         if (this->cached && this->allocation.isBound())
             this->flush();
                
          if (this->built)
@@ -462,11 +462,13 @@ namespace Neurology
          if (!this->built)
             throw NeverConstructedException(*this);
          
-         this->pointer()->~BaseType();
          this->built = false;
 
          if (this->allocation.isBound())
+         {
+            this->pointer()->~BaseType();
             this->allocation.deallocate();
+         }
 
          this->cache.empty();
       }
