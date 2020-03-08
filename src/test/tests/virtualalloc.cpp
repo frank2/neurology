@@ -26,7 +26,7 @@ VirtualAllocatorTest::testAllocator
    VirtualAllocator allocator;
    Process process;
    Page page;
-   AccessMask access;
+   ProcessAccess access;
    Object<std::uintptr_t> object;
 
    NASSERT(allocator.isLocal());

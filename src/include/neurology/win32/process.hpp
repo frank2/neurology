@@ -1,43 +1,58 @@
 #pragma once
 
 #include <windows.h>
+#include <tlhelp32.h>
 
 #include <string>
+#include <vector>
 
 #include <neurology/exception.hpp>
+#include <neurology/win32/access.hpp>
 #include <neurology/win32/handle.hpp>
 
 namespace Neurology
 {
    typedef DWORD PID;
-      
-   struct AccessMask
-   {
-      union
-      {
-         struct
-         {
-            BYTE terminate : 1;
-            BYTE createThread : 1;
-            BYTE setSessionID : 1;
-            BYTE vmOperation : 1;
-            BYTE vmRead : 1;
-            BYTE vmWrite : 1;
-            BYTE dupHandle : 1;
-            BYTE createProcess : 1;
-            BYTE setQuota : 1;
-            BYTE setInformation : 1;
-            BYTE queryInformation : 1;
-            BYTE suspendResume : 1;
-            BYTE queryLimitedInformation : 1;
-            BYTE setLimitedInformation : 1;
-         };
-         DWORD mask;
-      };
+   typedef DWORD TID;
+   typedef PROCESSENTRY32 ProcessEntry;
+   typedef std::vector<ProcessEntry> ProcessList;
+   typedef THREADENTRY32 ThreadEntry;
+   typedef std::vector<ThreadEntry> ThreadList;
+   
+   class Process;
 
-      AccessMask(void) { this->mask = 0; }
-      AccessMask(DWORD mask) { this->mask = mask; }
-      operator DWORD (void) { return this->mask; }
+   class Thread
+   {
+   protected:
+      Handle handle;
+      Process *process;
+
+   public:
+      Thread(void);
+      Thread(Handle handle, Process *process);
+      Thread(Thread &thread);
+
+      Thread &operator=(Thread &thread);
+
+      bool isAlive(void) const;
+      bool isCurrentThread(void) const;
+
+      Handle &getHandle(void);
+      const Handle &getHandle(void) const;
+
+      int getPriority(void) const;
+      void setPriority(int priority);
+      
+      TID tid(void) const;
+      
+      void suspend(void);
+      void resume(void);
+      void kill(DWORD exitCode);
+      void close(void);
+      DWORD wait(void) const;
+      DWORD wait(DWORD timeout) const;
+
+      DWORD getExitCode(void) const;
    };
 
    class Process
@@ -51,20 +66,27 @@ namespace Neurology
          Exception(const Process &process, const LPWSTR message);
       };
 
+      class RemoteProcessException : public Exception
+      {
+      public:
+         RemoteProcessException(const Process &process);
+      };
+
    protected:
       Handle handle;
 
    public:
       Process(void);
       Process(Handle handle);
-      Process(AccessMask access, PID pid);
-      Process(AccessMask access, BOOL inheritHandle, PID pid);
+      Process(ProcessAccess access, PID pid);
+      Process(ProcessAccess access, BOOL inheritHandle, PID pid);
       Process(Process &process);
 
       static Process Spawn(std::wstring cmdLine);
       static Process Spawn(std::wstring cmdLine, DWORD flags);
       static Handle CurrentProcessHandle(void);
       static Process CurrentProcess(void);
+      static ProcessList ProcessList(void);
 
       Process &operator=(Process &process);
       
@@ -72,14 +94,28 @@ namespace Neurology
       const Handle &getHandle(void) const;
 
       bool isAlive(void) const;
+      bool isCurrentProcess(void) const;
 
       PID pid(void) const;
 
       void open(PID pid);
-      void open(AccessMask access);
-      void open(AccessMask access, PID pid);
-      void open(AccessMask access, BOOL inheritHandle, PID pid);
+      void open(ProcessAccess access);
+      void open(ProcessAccess access, PID pid);
+      void open(ProcessAccess access, BOOL inheritHandle, PID pid);
       void close(void);
       void kill(UINT exitCode);
+      DWORD wait(void) const;
+      DWORD wait(DWORD timeout) const;
+
+      Thread createThread(LPTHREAD_START_ROUTINE start, LPVOID parameter);
+      Thread createThread(LPTHREAD_START_ROUTINE start, LPVOID parameter, DWORD creationFlags);
+      Thread createThread(LPTHREAD_START_ROUTINE start, LPVOID parameter, DWORD creationFlags
+                          ,SIZE_T stackSize);
+
+      Thread openThread(TID tid);
+      Thread openThread(ThreadAccess access, TID tid);
+      Thread openThread(ThreadAccess access, BOOL inheritHandle, TID tid);
+
+      ThreadList threadList(void) const;
    };
 }

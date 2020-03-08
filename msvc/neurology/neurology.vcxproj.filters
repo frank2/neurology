@@ -75,6 +75,9 @@
     <ClInclude Include="..\..\src\include\neurology\win32.hpp">
       <Filter>Header Files\neurology</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\src\include\neurology\win32\access.hpp">
+      <Filter>Header Files\neurology\win32</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\lib\exception.cpp">

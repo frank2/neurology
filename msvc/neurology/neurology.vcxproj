@@ -155,6 +155,7 @@
     <ClInclude Include="..\..\src\include\neurology\exception.hpp" />
     <ClInclude Include="..\..\src\include\neurology\object.hpp" />
     <ClInclude Include="..\..\src\include\neurology\win32.hpp" />
+    <ClInclude Include="..\..\src\include\neurology\win32\access.hpp" />
     <ClInclude Include="..\..\src\include\neurology\win32\handle.hpp" />
     <ClInclude Include="..\..\src\include\neurology\win32\process.hpp" />
   </ItemGroup>
